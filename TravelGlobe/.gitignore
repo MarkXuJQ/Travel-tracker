@@ -1,0 +1,26 @@
+# Node
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+
+# SvelteKit
+.svelte-kit
+.vercel
+.output
+build
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs
+*.njsproj
+*.sln
+*.sw?
