@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { TravelRecord, Statistics } from '@/types';
-import { CHINA_PROVINCES, WORLD_COUNTRIES, getTotalCities } from '@/data/chinaData';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import type { TravelRecord, Statistics } from "@/types";
+import {
+  CHINA_PROVINCES,
+  WORLD_COUNTRIES,
+  getTotalCities,
+} from "@/data/chinaData";
 
 // 访问状态存储
 interface VisitedState {
@@ -9,129 +13,156 @@ interface VisitedState {
   cities: Set<string>;
 }
 
-const STORAGE_KEY = 'travel-records-v3';
-const VISITED_KEY = 'travel-visited-v3';
+const STORAGE_KEY = "travel-records-v3";
+const VISITED_KEY = "travel-visited-v3";
+
+const createEmptyVisited = (): VisitedState => ({
+  countries: new Set(),
+  provinces: new Set(),
+  cities: new Set(),
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const normalizeRecords = (value: unknown): TravelRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    const location = isRecord(item.location) ? item.location : null;
+    if (!location || typeof location.country !== "string") {
+      return [];
+    }
+
+    const startDate = typeof item.startDate === "string" ? item.startDate : "";
+    const endDate = typeof item.endDate === "string" ? item.endDate : "";
+    const datePrecision = item.datePrecision === "month" ? "month" : "day";
+
+    if (!startDate || !endDate) {
+      return [];
+    }
+
+    const lat = typeof location.lat === "number" ? location.lat : 0;
+    const lng = typeof location.lng === "number" ? location.lng : 0;
+
+    const normalized: TravelRecord = {
+      id:
+        typeof item.id === "string" && item.id
+          ? item.id
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      startDate,
+      endDate,
+      datePrecision,
+      location: {
+        country: location.country,
+        countryCode:
+          typeof location.countryCode === "string" ? location.countryCode : "",
+        province:
+          typeof location.province === "string" ? location.province : undefined,
+        provinceCode:
+          typeof location.provinceCode === "string"
+            ? location.provinceCode
+            : undefined,
+        city: typeof location.city === "string" ? location.city : undefined,
+        lat,
+        lng,
+      },
+      blogUrl: typeof item.blogUrl === "string" ? item.blogUrl : undefined,
+      notes: typeof item.notes === "string" ? item.notes : undefined,
+      createdAt:
+        typeof item.createdAt === "number" ? item.createdAt : Date.now(),
+    };
+
+    return [normalized];
+  });
+};
+
+const buildVisitedFromRecords = (records: TravelRecord[]): VisitedState => {
+  const next = createEmptyVisited();
+
+  records.forEach((record) => {
+    const loc = record.location;
+    if (loc.country) {
+      next.countries.add(loc.country);
+    }
+    if (loc.province) {
+      next.provinces.add(loc.province);
+    }
+    if (loc.city) {
+      next.cities.add(loc.city);
+    }
+  });
+
+  return next;
+};
 
 export function useTravelStore() {
   const [records, setRecords] = useState<TravelRecord[]>([]);
-  const [visited, setVisited] = useState<VisitedState>({
-    countries: new Set(),
-    provinces: new Set(),
-    cities: new Set(),
-  });
   const [isLoaded, setIsLoaded] = useState(false);
+  const visited = useMemo(() => buildVisitedFromRecords(records), [records]);
 
   // 从 localStorage 加载数据
   useEffect(() => {
-    const savedRecords = localStorage.getItem(STORAGE_KEY);
-    const savedVisited = localStorage.getItem(VISITED_KEY);
-    
-    if (savedRecords) {
+    try {
+      const savedRecords = localStorage.getItem(STORAGE_KEY);
+      if (savedRecords) {
+        const parsed = JSON.parse(savedRecords);
+        setRecords(normalizeRecords(parsed));
+      }
+    } catch (e) {
+      console.error("Failed to load records:", e);
+      setRecords([]);
+    } finally {
+      setIsLoaded(true);
       try {
-        setRecords(JSON.parse(savedRecords));
+        localStorage.removeItem(VISITED_KEY);
       } catch (e) {
-        console.error('Failed to parse records:', e);
+        console.error("Failed to clean legacy storage:", e);
       }
     }
-    
-    if (savedVisited) {
-      try {
-        const parsed = JSON.parse(savedVisited);
-        setVisited({
-          countries: new Set(parsed.countries || []),
-          provinces: new Set(parsed.provinces || []),
-          cities: new Set(parsed.cities || []),
-        });
-      } catch (e) {
-        console.error('Failed to parse visited:', e);
-      }
-    }
-    
-    setIsLoaded(true);
   }, []);
 
   // 保存到 localStorage
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-      localStorage.setItem(VISITED_KEY, JSON.stringify({
-        countries: Array.from(visited.countries),
-        provinces: Array.from(visited.provinces),
-        cities: Array.from(visited.cities),
-      }));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      } catch (e) {
+        console.error("Failed to save records:", e);
+      }
     }
-  }, [records, visited, isLoaded]);
+  }, [records, isLoaded]);
 
   // 添加旅行记录
-  const addRecord = useCallback((record: Omit<TravelRecord, 'id' | 'createdAt'>) => {
-    const newRecord: TravelRecord = {
-      ...record,
-      id: Date.now().toString(),
-      createdAt: Date.now(),
-    };
-    
-    setRecords(prev => [newRecord, ...prev]);
-    
-    // 更新访问状态
-    setVisited(prev => {
-      const next = {
-        countries: new Set(prev.countries),
-        provinces: new Set(prev.provinces),
-        cities: new Set(prev.cities),
+  const addRecord = useCallback(
+    (record: Omit<TravelRecord, "id" | "createdAt">) => {
+      const generatedId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      const newRecord: TravelRecord = {
+        ...record,
+        id: generatedId,
+        createdAt: Date.now(),
       };
-      
-      const loc = record.location;
-      
-      // 标记城市（最具体）
-      if (loc.city) {
-        next.cities.add(loc.city);
-        // 同时标记所属省份
-        if (loc.province) {
-          next.provinces.add(loc.province);
-        }
-      }
-      // 标记省份
-      else if (loc.province) {
-        next.provinces.add(loc.province);
-      }
-      // 标记国家
-      else if (loc.country) {
-        next.countries.add(loc.country);
-      }
-      
-      return next;
-    });
-    
-    return newRecord.id;
-  }, []);
+
+      setRecords((prev) => [newRecord, ...prev]);
+
+      return newRecord.id;
+    },
+    [],
+  );
 
   // 删除旅行记录
   const deleteRecord = useCallback((id: string) => {
-    setRecords(prev => {
-      const remaining = prev.filter(r => r.id !== id);
-      
-      // 重新计算访问状态
-      const newVisited: VisitedState = {
-        countries: new Set(),
-        provinces: new Set(),
-        cities: new Set(),
-      };
-      
-      remaining.forEach(r => {
-        const loc = r.location;
-        if (loc.city) {
-          newVisited.cities.add(loc.city);
-          if (loc.province) newVisited.provinces.add(loc.province);
-        } else if (loc.province) {
-          newVisited.provinces.add(loc.province);
-        } else if (loc.country) {
-          newVisited.countries.add(loc.country);
-        }
-      });
-      
-      setVisited(newVisited);
-      return remaining;
-    });
+    setRecords((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
   // 获取统计数据
@@ -139,19 +170,21 @@ export function useTravelStore() {
     const totalCountries = WORLD_COUNTRIES.length;
     const totalProvinces = CHINA_PROVINCES.length;
     const totalCities = getTotalCities();
-    
+
     // 计算精确日期的旅行天数
     let totalDays = 0;
-    records.forEach(record => {
-      if (record.datePrecision === 'day') {
+    records.forEach((record) => {
+      if (record.datePrecision === "day") {
         const start = new Date(record.startDate);
         const end = new Date(record.endDate);
-        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const days =
+          Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) +
+          1;
         totalDays += Math.max(1, days);
       }
       // 仅月份的记录不计入天数
     });
-    
+
     return {
       global: {
         visited: visited.countries.size,
@@ -174,26 +207,36 @@ export function useTravelStore() {
   }, [visited, records]);
 
   // 获取省份统计
-  const getProvinceStats = useCallback((provinceName: string) => {
-    const province = CHINA_PROVINCES.find(p => p.name === provinceName);
-    if (!province) return { total: 0, visited: 0, percentage: 0 };
-    
-    const total = province.cities.length;
-    const visitedCities = province.cities.filter(c => visited.cities.has(c.name)).length;
-    
-    return {
-      total,
-      visited: visitedCities,
-      percentage: Math.round((visitedCities / total) * 100),
-    };
-  }, [visited.cities]);
+  const getProvinceStats = useCallback(
+    (provinceName: string) => {
+      const province = CHINA_PROVINCES.find((p) => p.name === provinceName);
+      if (!province) return { total: 0, visited: 0, percentage: 0 };
+
+      const total = province.cities.length;
+      const visitedCities = province.cities.filter((c) =>
+        visited.cities.has(c.name),
+      ).length;
+
+      return {
+        total,
+        visited: visitedCities,
+        percentage: Math.round((visitedCities / total) * 100),
+      };
+    },
+    [visited.cities],
+  );
 
   // 获取已访问的城市列表（带坐标）
   const getVisitedCities = useCallback(() => {
-    const result: { name: string; lat: number; lng: number; province: string }[] = [];
-    
-    CHINA_PROVINCES.forEach(province => {
-      province.cities.forEach(city => {
+    const result: {
+      name: string;
+      lat: number;
+      lng: number;
+      province: string;
+    }[] = [];
+
+    CHINA_PROVINCES.forEach((province) => {
+      province.cities.forEach((city) => {
         if (visited.cities.has(city.name)) {
           result.push({
             name: city.name,
@@ -204,45 +247,39 @@ export function useTravelStore() {
         }
       });
     });
-    
+
     return result;
   }, [visited.cities]);
 
   // 获取已访问的省份列表
   const getVisitedProvinces = useCallback(() => {
-    return CHINA_PROVINCES.filter(p => visited.provinces.has(p.name));
+    return CHINA_PROVINCES.filter((p) => visited.provinces.has(p.name));
   }, [visited.provinces]);
 
   // 获取已访问的国家列表
   const getVisitedCountries = useCallback(() => {
-    return WORLD_COUNTRIES.filter(c => visited.countries.has(c.name));
+    return WORLD_COUNTRIES.filter((c) => visited.countries.has(c.name));
   }, [visited.countries]);
 
   // 检查是否已访问
-  const isVisited = useCallback((type: 'country' | 'province' | 'city', name: string) => {
-    if (type === 'country') return visited.countries.has(name);
-    if (type === 'province') return visited.provinces.has(name);
-    return visited.cities.has(name);
-  }, [visited]);
+  const isVisited = useCallback(
+    (type: "country" | "province" | "city", name: string) => {
+      if (type === "country") return visited.countries.has(name);
+      if (type === "province") return visited.provinces.has(name);
+      return visited.cities.has(name);
+    },
+    [visited],
+  );
 
   // 从分享数据导入
-  const importFromShare = useCallback((data: { records: TravelRecord[]; visited: VisitedState }) => {
-    setRecords(data.records);
-    setVisited({
-      countries: new Set(data.visited.countries),
-      provinces: new Set(data.visited.provinces),
-      cities: new Set(data.visited.cities),
-    });
+  const importFromShare = useCallback((data: unknown) => {
+    const parsed = isRecord(data) ? normalizeRecords(data.records) : [];
+    setRecords(parsed);
   }, []);
 
   // 清空数据
   const clearAll = useCallback(() => {
     setRecords([]);
-    setVisited({
-      countries: new Set(),
-      provinces: new Set(),
-      cities: new Set(),
-    });
   }, []);
 
   return {
