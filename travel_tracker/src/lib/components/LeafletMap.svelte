@@ -34,24 +34,23 @@
     tileLayers = {
       osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
-        noWrap: true, // Prevent horizontal wrapping
-        bounds: [[-90, -180], [90, 180]]
+        noWrap: false // Allow wrapping to show extra width
       }),
       satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri',
-        noWrap: true, // Prevent horizontal wrapping
-        bounds: [[-90, -180], [90, 180]]
+        noWrap: false // Allow wrapping to show extra width
       })
     };
 
-    // Define bounds with a little extra space to handle antimeridian wrapping
-    const southWest = L.latLng(-90, -190);
-    const northEast = L.latLng(90, 190);
+    // Define bounds: expand by 50% on each side (total width = 2 * 360 = 720 degrees)
+    // Left: -180 - 180 = -360, Right: 180 + 180 = 360
+    const southWest = L.latLng(-90, -360);
+    const northEast = L.latLng(90, 360);
     const bounds = L.latLngBounds(southWest, northEast);
 
     map = L.map(mapElement, {
       maxBounds: bounds,
-      maxBoundsViscosity: 0.8, // Slightly less sticky to allow seeing the edges
+      maxBoundsViscosity: 1.0, // Fully sticky to prevent going out of bounds
       minZoom: 1.5,
       worldCopyJump: false
     }).setView([35, 105], 4); 
