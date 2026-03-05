@@ -1,4 +1,4 @@
-# TravelGlobe
+# Travel Tracker
 
 一个模块化的旅行地图平台，基于 SvelteKit + TypeScript + Tailwind CSS 构建。
 

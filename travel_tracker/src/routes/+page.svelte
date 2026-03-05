@@ -9,7 +9,7 @@
   <LeafletMap />
   
   <div class="absolute top-4 left-4 z-[1000] bg-white/90 backdrop-blur p-4 rounded-xl shadow-2xl max-w-sm border border-white/20">
-    <h1 class="text-2xl font-black text-gray-800 tracking-tight">TravelGlobe</h1>
+    <h1 class="text-2xl font-black text-gray-800 tracking-tight">Travel Tracker</h1>
     <p class="text-xs text-gray-500 mt-1 uppercase font-bold tracking-widest">Explore the world in 2D and 3D.</p>
     
     <button 
