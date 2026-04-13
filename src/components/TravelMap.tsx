@@ -2,8 +2,30 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { Map, NavigationControl } from '@vis.gl/react-maplibre';
 import { Source, Layer } from '@vis.gl/react-maplibre';
 import * as topojson from 'topojson-client';
-import type { Journey } from '../data/travelConfig';
+import type { Journey } from '../types/journey';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+export type BaseMapMode = 'liberty' | 'bright' | 'night';
+
+type MapTone = 'light' | 'night';
+
+const BASE_MAPS: Record<BaseMapMode, { styleUrl: string; shellClassName: string; tone: MapTone }> = {
+  liberty: {
+    styleUrl: 'https://tiles.openfreemap.org/styles/liberty',
+    shellClassName: 'bg-[radial-gradient(circle_at_top,#ecfeff_0%,#dbeafe_42%,#bfdbfe_100%)]',
+    tone: 'light',
+  },
+  bright: {
+    styleUrl: 'https://tiles.openfreemap.org/styles/bright',
+    shellClassName: 'bg-[radial-gradient(circle_at_top,#f8fafc_0%,#e0f2fe_46%,#dbeafe_100%)]',
+    tone: 'light',
+  },
+  night: {
+    styleUrl: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    shellClassName: 'bg-[#020617]',
+    tone: 'night',
+  },
+};
 
 // ---- Convert TopoJSON world-atlas to GeoJSON with antimeridian fix ----
 
@@ -62,26 +84,44 @@ function deriveHighlights(journeys: Journey[]) {
 // ---- Paint builders ----
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildWorldPaint(countries: string[]): any {
+function buildWorldPaint(countries: string[], tone: MapTone): any {
   const names = countries.filter(c => c !== 'China');
-  if (names.length === 0) return { 'fill-color': '#e5e7eb', 'fill-opacity': 0.3 };
+  if (tone === 'night') {
+    return {
+      'fill-color': ['match', ['get', 'name'], names, '#22d3ee', '#020617'],
+      'fill-opacity': ['match', ['get', 'name'], names, 0.34, 0.06],
+    };
+  }
+
   return {
-    'fill-color': ['match', ['get', 'name'], names, '#4ade80', '#e5e7eb'],
-    'fill-opacity': ['match', ['get', 'name'], names, 0.6, 0.3],
+    'fill-color': ['match', ['get', 'name'], names, '#14b8a6', '#ecfeff'],
+    'fill-opacity': ['match', ['get', 'name'], names, 0.42, 0.05],
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildProvincePaint(provinces: string[]): any {
+function buildProvincePaint(provinces: string[], tone: MapTone): any {
   if (provinces.length === 0) return { 'fill-color': 'transparent', 'fill-opacity': 0 };
+
+  if (tone === 'night') {
+    return {
+      'fill-color': ['match', ['get', 'name'], provinces, '#fbbf24', 'transparent'],
+      'fill-opacity': ['match', ['get', 'name'], provinces, 0.56, 0],
+    };
+  }
+
   return {
-    'fill-color': ['match', ['get', 'name'], provinces, '#facc15', 'transparent'],
-    'fill-opacity': ['match', ['get', 'name'], provinces, 0.5, 0],
+    'fill-color': ['match', ['get', 'name'], provinces, '#f59e0b', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], provinces, 0.52, 0],
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildCityPaint(features: GeoJSON.Feature[], visitedCities: string[], visitedProvinceGeoNames: string[]): any {
+function getHighlightedCityNames(
+  features: GeoJSON.Feature[],
+  visitedCities: string[],
+  visitedProvinceGeoNames: string[],
+): string[] {
   const highlighted: string[] = [];
 
   for (const f of features) {
@@ -104,10 +144,42 @@ function buildCityPaint(features: GeoJSON.Feature[], visitedCities: string[], vi
     }
   }
 
+  return highlighted;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildCityPaint(highlighted: string[], tone: MapTone): any {
   if (highlighted.length === 0) return { 'fill-color': 'transparent', 'fill-opacity': 0 };
+
+  if (tone === 'night') {
+    return {
+      'fill-color': ['match', ['get', 'name'], highlighted, '#93c5fd', 'transparent'],
+      'fill-opacity': ['match', ['get', 'name'], highlighted, 0.28, 0],
+    };
+  }
+
   return {
-    'fill-color': ['match', ['get', 'name'], highlighted, '#fb923c', 'transparent'],
-    'fill-opacity': ['match', ['get', 'name'], highlighted, 0.55, 0],
+    'fill-color': ['match', ['get', 'name'], highlighted, '#f97316', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], highlighted, 0.58, 0],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildCityGlowPaint(highlighted: string[], tone: MapTone): any {
+  if (tone !== 'night' || highlighted.length === 0) {
+    return {
+      'line-color': 'transparent',
+      'line-opacity': 0,
+      'line-width': 0,
+      'line-blur': 0,
+    };
+  }
+
+  return {
+    'line-color': ['match', ['get', 'name'], highlighted, '#67e8f9', 'transparent'],
+    'line-opacity': ['match', ['get', 'name'], highlighted, 0.5, 0],
+    'line-width': ['match', ['get', 'name'], highlighted, 2.2, 0],
+    'line-blur': ['match', ['get', 'name'], highlighted, 1.3, 0],
   };
 }
 
@@ -115,12 +187,15 @@ function buildCityPaint(features: GeoJSON.Feature[], visitedCities: string[], vi
 
 interface Props {
   journeys: Journey[];
+  baseMap?: BaseMapMode;
 }
 
-export default function TravelMap({ journeys }: Props) {
+export default function TravelMap({ journeys, baseMap = 'liberty' }: Props) {
   const [worldData, setWorldData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cityData, setCityData] = useState<GeoJSON.FeatureCollection | null>(null);
   const cityLoadingRef = useRef(false);
+  const mapTheme = BASE_MAPS[baseMap];
+  const isNightMode = mapTheme.tone === 'night';
 
   useEffect(() => {
     loadWorldGeoJSON().then(setWorldData).catch(console.error);
@@ -141,18 +216,24 @@ export default function TravelMap({ journeys }: Props) {
       .finally(() => { cityLoadingRef.current = false; });
   }, [cities, cityData]);
 
-  const worldPaint = useMemo(() => buildWorldPaint(countries), [countries]);
-  const provincePaint = useMemo(() => buildProvincePaint(provinces), [provinces]);
-  const cityPaint = useMemo(() => {
-    if (!cityData) return null;
-    return buildCityPaint(cityData.features as GeoJSON.Feature[], cities, provinces);
+  const worldPaint = useMemo(() => buildWorldPaint(countries, mapTheme.tone), [countries, mapTheme.tone]);
+  const provincePaint = useMemo(() => buildProvincePaint(provinces, mapTheme.tone), [provinces, mapTheme.tone]);
+  const highlightedCityNames = useMemo(() => {
+    if (!cityData) return [];
+    return getHighlightedCityNames(cityData.features as GeoJSON.Feature[], cities, provinces);
   }, [cityData, cities, provinces]);
+  const cityPaint = useMemo(() => {
+    return buildCityPaint(highlightedCityNames, mapTheme.tone);
+  }, [highlightedCityNames, mapTheme.tone]);
+  const cityGlowPaint = useMemo(() => {
+    return buildCityGlowPaint(highlightedCityNames, mapTheme.tone);
+  }, [highlightedCityNames, mapTheme.tone]);
 
   return (
-    <div className="w-full h-full">
+    <div className={`map-shell ${isNightMode ? 'map-shell--night' : 'map-shell--light'} ${mapTheme.shellClassName} w-full h-full`}>
       <Map
         initialViewState={{ longitude: 105, latitude: 35, zoom: 3.5 }}
-        mapStyle="https://tiles.openfreemap.org/styles/positron"
+        mapStyle={mapTheme.styleUrl}
         style={{ width: '100%', height: '100%' }}
         minZoom={1.5}
       >
@@ -171,7 +252,11 @@ export default function TravelMap({ journeys }: Props) {
             <Layer
               id="world-border"
               type="line"
-              paint={{ 'line-color': '#ffffff', 'line-width': 0.5 }}
+              paint={{
+                'line-color': isNightMode ? '#334155' : '#ffffff',
+                'line-opacity': isNightMode ? 0.82 : 0.7,
+                'line-width': isNightMode ? 0.6 : 0.55,
+              }}
               filter={['!=', ['get', 'name'], 'China']}
             />
           </Source>
@@ -189,7 +274,11 @@ export default function TravelMap({ journeys }: Props) {
             <Layer
               id="china-border"
               type="line"
-              paint={{ 'line-color': '#9ca3af', 'line-width': 0.5 }}
+              paint={{
+                'line-color': isNightMode ? '#334155' : '#475569',
+                'line-opacity': isNightMode ? 0.58 : 0.36,
+                'line-width': isNightMode ? 0.55 : 0.5,
+              }}
             />
           </Source>
         )}
@@ -204,9 +293,19 @@ export default function TravelMap({ journeys }: Props) {
               paint={cityPaint as any}
             />
             <Layer
+              id="city-glow"
+              type="line"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={cityGlowPaint as any}
+            />
+            <Layer
               id="city-border"
               type="line"
-              paint={{ 'line-color': '#d1d5db', 'line-width': 0.4 }}
+              paint={{
+                'line-color': isNightMode ? '#475569' : '#64748b',
+                'line-opacity': isNightMode ? 0.42 : 0.26,
+                'line-width': isNightMode ? 0.4 : 0.35,
+              }}
             />
           </Source>
         )}
