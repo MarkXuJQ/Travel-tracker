@@ -19,8 +19,11 @@ export default function TravelTracker() {
   const {
     journeys,
     userName,
+    birthplace,
     addJourney,
+    updateJourney,
     deleteJourney,
+    setBirthplace,
     exportRecord,
   } = useJourneyStore();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -58,7 +61,13 @@ export default function TravelTracker() {
 
   return (
     <div className="w-full h-full relative">
-      <TravelMap journeys={journeys} baseMap={baseMap} selectedJourney={selectedJourney} panelOpen={panelOpen} />
+      <TravelMap
+        journeys={journeys}
+        birthplace={birthplace}
+        baseMap={baseMap}
+        selectedJourney={selectedJourney}
+        panelOpen={panelOpen}
+      />
 
       <div
         className={`absolute top-4 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-lg backdrop-blur-md ${
@@ -118,8 +127,11 @@ export default function TravelTracker() {
         isOpen={panelOpen}
         onClose={() => setPanelOpen(false)}
         userName={userName}
+        birthplace={birthplace}
+        setBirthplace={setBirthplace}
         journeys={journeys}
         addJourney={addJourney}
+        updateJourney={updateJourney}
         deleteJourney={handleDeleteJourney}
         exportRecord={exportRecord}
         selectedJourneyId={selectedJourneyId}

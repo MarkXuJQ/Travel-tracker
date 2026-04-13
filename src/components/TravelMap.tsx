@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Map, NavigationControl, Source, Layer, type MapRef } from '@vis.gl/react-maplibre';
 import * as topojson from 'topojson-client';
-import { resolveJourneyLocationCoords } from '../data/locationData';
-import type { Journey } from '../types/journey';
+import { getCountryNameForLocation, getProvinceGeoNameByCityName, resolveJourneyLocationCoords } from '../data/locationData';
+import type { Journey, JourneyLocation } from '../types/journey';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export type BaseMapMode = 'liberty' | 'bright' | 'night';
@@ -59,43 +59,60 @@ async function loadWorldGeoJSON(): Promise<GeoJSON.FeatureCollection> {
 // Highlight level is determined purely by location type:
 //   type='country'  → highlight on world layer
 //   type='province' → highlight on china-provinces layer
-//   type='city'     → highlight on city-boundaries layer
+//   type='city'     → highlight city boundaries and auto-light its province
 
 function deriveHighlights(journeys: Journey[]) {
-  const countries: string[] = [];
-  const provinces: string[] = [];
-  const cities: string[] = [];
+  const countries = new Set<string>();
+  const provinces = new Set<string>();
+  const cities = new Set<string>();
 
   for (const journey of journeys) {
     for (const loc of (journey.locations ?? [])) {
-      if (loc.type === 'country' && !countries.includes(loc.name)) {
-        countries.push(loc.name);
-      } else if (loc.type === 'province' && !provinces.includes(loc.name)) {
-        provinces.push(loc.name);
-      } else if (loc.type === 'city' && !cities.includes(loc.name)) {
-        cities.push(loc.name);
+      const countryName = getCountryNameForLocation(loc);
+      if (countryName) countries.add(countryName);
+
+      if (loc.type === 'province') {
+        provinces.add(loc.name);
+      } else if (loc.type === 'city') {
+        cities.add(loc.name);
+        const provinceGeoName = getProvinceGeoNameByCityName(loc.name);
+        if (provinceGeoName) provinces.add(provinceGeoName);
       }
     }
   }
 
-  return { countries, provinces, cities };
+  return {
+    countries: [...countries],
+    provinces: [...provinces],
+    cities: [...cities],
+  };
 }
 
 // ---- Paint builders ----
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildWorldPaint(countries: string[], tone: MapTone): any {
-  const names = countries.filter(c => c !== 'China');
+function buildWorldPaint(countries: string[], tone: MapTone, hiddenCountry?: string | null): any {
+  const excludedCountry = hiddenCountry && hiddenCountry !== 'China' ? hiddenCountry : null;
+  const names = countries.filter(country => country !== 'China' && country !== excludedCountry);
+
   if (tone === 'night') {
     return {
-      'fill-color': ['match', ['get', 'name'], names, '#22d3ee', '#020617'],
-      'fill-opacity': ['match', ['get', 'name'], names, 0.34, 0.06],
+      'fill-color': excludedCountry
+        ? ['case', ['==', ['get', 'name'], excludedCountry], 'transparent', ['match', ['get', 'name'], names, '#22d3ee', '#020617']]
+        : ['match', ['get', 'name'], names, '#22d3ee', '#020617'],
+      'fill-opacity': excludedCountry
+        ? ['case', ['==', ['get', 'name'], excludedCountry], 0, ['match', ['get', 'name'], names, 0.34, 0.06]]
+        : ['match', ['get', 'name'], names, 0.34, 0.06],
     };
   }
 
   return {
-    'fill-color': ['match', ['get', 'name'], names, '#14b8a6', '#ecfeff'],
-    'fill-opacity': ['match', ['get', 'name'], names, 0.42, 0.05],
+    'fill-color': excludedCountry
+      ? ['case', ['==', ['get', 'name'], excludedCountry], 'transparent', ['match', ['get', 'name'], names, '#14b8a6', '#ecfeff']]
+      : ['match', ['get', 'name'], names, '#14b8a6', '#ecfeff'],
+    'fill-opacity': excludedCountry
+      ? ['case', ['==', ['get', 'name'], excludedCountry], 0, ['match', ['get', 'name'], names, 0.42, 0.05]]
+      : ['match', ['get', 'name'], names, 0.42, 0.05],
   };
 }
 
@@ -105,14 +122,14 @@ function buildProvincePaint(provinces: string[], tone: MapTone): any {
 
   if (tone === 'night') {
     return {
-      'fill-color': ['match', ['get', 'name'], provinces, '#fbbf24', 'transparent'],
-      'fill-opacity': ['match', ['get', 'name'], provinces, 0.56, 0],
+      'fill-color': ['match', ['get', 'name'], provinces, '#7dd3fc', 'transparent'],
+      'fill-opacity': ['match', ['get', 'name'], provinces, 0.1, 0],
     };
   }
 
   return {
-    'fill-color': ['match', ['get', 'name'], provinces, '#f59e0b', 'transparent'],
-    'fill-opacity': ['match', ['get', 'name'], provinces, 0.52, 0],
+    'fill-color': ['match', ['get', 'name'], provinces, '#d6c9b4', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], provinces, 0.16, 0],
   };
 }
 
@@ -187,6 +204,7 @@ function buildCityGlowPaint(highlighted: string[], tone: MapTone): any {
 
 interface Props {
   journeys: Journey[];
+  birthplace?: JourneyLocation | null;
   baseMap?: BaseMapMode;
   selectedJourney?: Journey | null;
   panelOpen?: boolean;
@@ -321,6 +339,7 @@ function getRouteBounds(stops: RouteStop[]) {
 
 export default function TravelMap({
   journeys,
+  birthplace = null,
   baseMap = 'liberty',
   selectedJourney = null,
   panelOpen = false,
@@ -337,6 +356,10 @@ export default function TravelMap({
   }, []);
 
   const { countries, provinces, cities } = useMemo(() => deriveHighlights(journeys), [journeys]);
+  const birthplaceCountry = useMemo(
+    () => (birthplace ? getCountryNameForLocation(birthplace) : null),
+    [birthplace],
+  );
 
   const hasChinaContent = provinces.length > 0 || cities.length > 0;
 
@@ -351,7 +374,10 @@ export default function TravelMap({
       .finally(() => { cityLoadingRef.current = false; });
   }, [cities, cityData]);
 
-  const worldPaint = useMemo(() => buildWorldPaint(countries, mapTheme.tone), [countries, mapTheme.tone]);
+  const worldPaint = useMemo(
+    () => buildWorldPaint(countries, mapTheme.tone, birthplaceCountry),
+    [birthplaceCountry, countries, mapTheme.tone],
+  );
   const provincePaint = useMemo(() => buildProvincePaint(provinces, mapTheme.tone), [provinces, mapTheme.tone]);
   const highlightedCityNames = useMemo(() => {
     if (!cityData) return [];

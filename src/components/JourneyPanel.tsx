@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Journey, JourneyLocation } from '../types/journey';
 import { getTravelStats } from '../utils/travelStats';
 import LocationPicker from './LocationPicker';
@@ -7,8 +7,11 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   userName: string;
+  birthplace: JourneyLocation | null;
+  setBirthplace: (location: JourneyLocation | null) => void;
   journeys: Journey[];
   addJourney: (journey: Omit<Journey, 'id'>) => void;
+  updateJourney: (id: string, journey: Omit<Journey, 'id'>) => void;
   deleteJourney: (id: string) => void;
   exportRecord: () => void;
   selectedJourneyId: string | null;
@@ -21,6 +24,14 @@ const emptyForm = (): Omit<Journey, 'id'> => ({
   locations: [],
   description: '',
   url: '',
+});
+
+const formFromJourney = (journey: Journey): Omit<Journey, 'id'> => ({
+  title: journey.title,
+  date: journey.date ?? '',
+  locations: journey.locations.map(location => ({ ...location })),
+  description: journey.description ?? '',
+  url: journey.url ?? '',
 });
 
 const TYPE_LABEL: Record<JourneyLocation['type'], string> = {
@@ -86,12 +97,23 @@ function getOverviewMessage(journeyCount: number, footprintCount: number) {
   return `已经收进 ${journeyCount} 段旅程、${footprintCount} 个足迹单位，地图正在一点点被你点亮。`;
 }
 
+function getBirthplaceMessage(birthplace: JourneyLocation | null) {
+  if (!birthplace) {
+    return '设置出生地后，对应国家会保留原始底图，不再额外覆盖旅行遮罩。';
+  }
+
+  return `当前出生地是 ${birthplace.label}。它不会生成一条旅程，只用于让地图更像你的个人起点。`;
+}
+
 export default function JourneyPanel({
   isOpen,
   onClose,
   userName,
+  birthplace,
+  setBirthplace,
   journeys,
   addJourney,
+  updateJourney,
   deleteJourney,
   exportRecord,
   selectedJourneyId,
@@ -99,6 +121,7 @@ export default function JourneyPanel({
 }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
+  const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<Journey, 'id'>>(emptyForm);
 
   const stats = useMemo(() => getTravelStats(journeys), [journeys]);
@@ -109,24 +132,61 @@ export default function JourneyPanel({
   const footprintCount = stats.countryCount + stats.provinceCount + stats.cityCount;
   const headerMessage = getHeaderMessage(userName, stats.journeyCount);
   const overviewMessage = getOverviewMessage(stats.journeyCount, footprintCount);
+  const birthplaceMessage = getBirthplaceMessage(birthplace);
+  const isEditing = editingJourneyId !== null;
+
+  const resetFormState = () => {
+    setForm(emptyForm());
+    setShowOptionalFields(false);
+    setShowForm(false);
+    setEditingJourneyId(null);
+  };
+
+  const openCreateForm = () => {
+    setEditingJourneyId(null);
+    setForm(emptyForm());
+    setShowOptionalFields(false);
+    setShowForm(true);
+  };
+
+  const openEditForm = (journey: Journey) => {
+    setEditingJourneyId(journey.id);
+    setForm(formFromJourney(journey));
+    setShowOptionalFields(Boolean(journey.description?.trim() || journey.url?.trim()));
+    setShowForm(true);
+  };
+
+  useEffect(() => {
+    if (!editingJourneyId) return;
+
+    const hasEditingJourney = journeys.some(journey => journey.id === editingJourneyId);
+    if (!hasEditingJourney) {
+      resetFormState();
+    }
+  }, [editingJourneyId, journeys]);
 
   const handleSubmit = () => {
     if (!form.title.trim() || form.locations.length === 0) return;
 
-    addJourney({
+    const draft = {
       title: form.title.trim(),
       date: form.date || undefined,
-      locations: form.locations,
+      locations: form.locations.map(location => ({ ...location })),
       description: form.description?.trim() || undefined,
       url: form.url?.trim() || undefined,
-    });
+    };
 
-    setForm(emptyForm());
-    setShowOptionalFields(false);
-    setShowForm(false);
+    if (editingJourneyId) {
+      updateJourney(editingJourneyId, draft);
+    } else {
+      addJourney(draft);
+    }
+
+    resetFormState();
   };
 
   const setLocations = (locations: JourneyLocation[]) => setForm(current => ({ ...current, locations }));
+  const setBirthplaceLocation = (locations: JourneyLocation[]) => setBirthplace(locations[0] ?? null);
 
   if (!isOpen) return null;
 
@@ -244,14 +304,43 @@ export default function JourneyPanel({
             </section>
 
             <section className="border-t border-stone-300/70 pt-6">
+              <div className="flex items-start justify-between gap-4 border-b border-stone-200/80 pb-4">
+                <div className="max-w-[22rem]">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Origin Point</p>
+                  <h3 className="font-editorial mt-2 text-[1.55rem] leading-none text-stone-900">出生地设置</h3>
+                  <p className="mt-3 text-sm leading-6 text-stone-600">{birthplaceMessage}</p>
+                </div>
+
+                {birthplace && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs uppercase tracking-[0.22em] text-stone-500 transition hover:text-stone-900"
+                    onClick={() => setBirthplace(null)}
+                  >
+                    清除
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-4 bg-[#fbf7ef] px-4 py-4">
+                <LocationPicker
+                  value={birthplace ? [birthplace] : []}
+                  onChange={setBirthplaceLocation}
+                  allowedTypes={['country', 'city']}
+                  maxSelections={1}
+                  placeholder="搜索出生国家或出生城市"
+                  helperText="出生地是单独设置，不会新增一条旅程记录。"
+                  showOrderHint={false}
+                />
+              </div>
+            </section>
+
+            <section className="border-t border-stone-300/70 pt-6">
               {!showForm ? (
                 <button
                   type="button"
                   className="group w-full text-left"
-                  onClick={() => {
-                    setShowOptionalFields(false);
-                    setShowForm(true);
-                  }}
+                  onClick={openCreateForm}
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -273,20 +362,20 @@ export default function JourneyPanel({
                 <div className="space-y-4">
                   <div className="flex items-end justify-between gap-4 border-b border-stone-200 pb-4">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Draft</p>
-                      <h3 className="font-editorial mt-2 text-[1.55rem] leading-none text-stone-900">新旅程</h3>
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
+                        {isEditing ? '修改中' : '草稿'}
+                      </p>
+                      <h3 className="font-editorial mt-2 text-[1.55rem] leading-none text-stone-900">
+                        {isEditing ? '修改旅程' : '新旅程'}
+                      </h3>
                       <p className="mt-3 text-sm leading-6 text-stone-600">
-                        先记下必要信息，备注和链接都可以稍后再加。
+                        {isEditing ? '改完后会直接更新这条旅程记录和地图预览。' : '先记下必要信息，备注和链接都可以稍后再加。'}
                       </p>
                     </div>
                     <button
                       type="button"
                       className="text-xs uppercase tracking-[0.22em] text-stone-500 transition hover:text-stone-900"
-                      onClick={() => {
-                        setForm(emptyForm());
-                        setShowOptionalFields(false);
-                        setShowForm(false);
-                      }}
+                      onClick={resetFormState}
                     >
                       取消
                     </button>
@@ -316,7 +405,13 @@ export default function JourneyPanel({
 
                     <div>
                       <p className="mb-2 block text-[11px] uppercase tracking-[0.26em] text-stone-500">地点</p>
-                      <LocationPicker value={form.locations} onChange={setLocations} />
+                      <LocationPicker
+                        value={form.locations}
+                        onChange={setLocations}
+                        allowedTypes={['country', 'city']}
+                        placeholder="按顺序搜索经过的城市或国家"
+                        helperText="省级范围会在首次添加该省城市后自动淡亮，不再需要单独添加省份。"
+                      />
                     </div>
 
                     <div className="border-t border-dashed border-stone-300 pt-4">
@@ -368,16 +463,12 @@ export default function JourneyPanel({
                       onClick={handleSubmit}
                       disabled={!form.title.trim() || form.locations.length === 0}
                     >
-                      收进旅程档案
+                      {isEditing ? '保存修改' : '收进旅程档案'}
                     </button>
                     <button
                       type="button"
                       className="rounded-full border border-stone-200 bg-white px-5 py-3 text-sm text-stone-700 transition hover:border-stone-300 hover:text-stone-900"
-                      onClick={() => {
-                        setForm(emptyForm());
-                        setShowOptionalFields(false);
-                        setShowForm(false);
-                      }}
+                      onClick={resetFormState}
                     >
                       取消
                     </button>
@@ -411,6 +502,8 @@ export default function JourneyPanel({
                         journey={journey}
                         index={index}
                         onDelete={deleteJourney}
+                        onEdit={() => openEditForm(journey)}
+                        editing={journey.id === editingJourneyId}
                         selected={journey.id === selectedJourneyId}
                         onSelect={() => onSelectJourney(journey.id)}
                       />
@@ -523,12 +616,16 @@ function JourneyCard({
   journey,
   index,
   onDelete,
+  onEdit,
+  editing,
   selected,
   onSelect,
 }: {
   journey: Journey;
   index: number;
   onDelete: (id: string) => void;
+  onEdit: () => void;
+  editing: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -541,7 +638,9 @@ function JourneyCard({
       tabIndex={0}
       aria-pressed={selected}
       className={`group relative px-4 py-5 text-left outline-none transition ${
-        selected
+        editing
+          ? 'bg-[#f1eadf] shadow-[inset_0_0_0_1px_rgba(87,83,78,0.18)]'
+          : selected
           ? 'bg-[#f5efe4] shadow-[inset_0_0_0_1px_rgba(120,113,108,0.16)]'
           : 'bg-[#fcf8f1] hover:bg-[#fdfaf5]'
       }`}
@@ -553,20 +652,41 @@ function JourneyCard({
         }
       }}
     >
-      <button
-        type="button"
-        className="absolute right-4 top-5 flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-stone-300 transition hover:border-stone-200/80 hover:bg-white/70 hover:text-red-500"
-        onClick={event => {
-          event.stopPropagation();
-          onDelete(journey.id);
-        }}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-      </button>
+      <div className="absolute right-4 top-5 flex flex-col items-center gap-2">
+        <button
+          type="button"
+          title="删除旅程"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-stone-300 transition hover:border-stone-200/80 hover:bg-white/70 hover:text-red-500"
+          onClick={event => {
+            event.stopPropagation();
+            onDelete(journey.id);
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
 
-      <div className="pr-8">
+        <button
+          type="button"
+          title="修改旅程"
+          className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${
+            editing
+              ? 'border-stone-300 bg-white/85 text-stone-700'
+              : 'border-transparent text-stone-300 hover:border-stone-200/80 hover:bg-white/70 hover:text-stone-700'
+          }`}
+          onClick={event => {
+            event.stopPropagation();
+            onEdit();
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="pr-20">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
@@ -587,8 +707,12 @@ function JourneyCard({
                 journey.title
               )}
             </h4>
-            <p className={`mt-2 text-[10px] uppercase tracking-[0.24em] ${selected ? 'text-stone-700' : 'text-stone-400'}`}>
-              {selected ? (hasRoutePreview ? '路线预览中' : '地点预览中') : (hasRoutePreview ? '点击查看路线' : '点击定位地点')}
+            <p className={`mt-2 text-[10px] uppercase tracking-[0.24em] ${editing || selected ? 'text-stone-700' : 'text-stone-400'}`}>
+              {editing
+                ? '正在编辑这条旅程'
+                : selected
+                  ? (hasRoutePreview ? '路线预览中' : '地点预览中')
+                  : (hasRoutePreview ? '点击查看路线' : '点击定位地点')}
             </p>
           </div>
 

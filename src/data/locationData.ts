@@ -2,6 +2,8 @@ import { CHINA_PROVINCES } from './chinaData';
 import { getProvinceGeoJsonName } from './chinaProvinceMeta';
 import type { JourneyLocation } from '../types/journey';
 
+const CHINA_COUNTRY_NAME = 'China';
+
 export type LocationOption = Omit<JourneyLocation, 'coords'> & {
   coords: [number, number];
   pinyin?: string; // for fuzzy search
@@ -76,31 +78,54 @@ const PROVINCES: LocationOption[] = CHINA_PROVINCES.map(p => ({
   coords: [p.lat, p.lng] as [number, number],
 }));
 
-// --- Chinese cities ---
-// 直辖市 (Beijing/Shanghai/Tianjin/Chongqing) have a single "city" entry
-// matching the province name — highlighted at province level in city mode.
-// Other cities use "XXX市" DataV name.
-const ZHIXIASHI = new Set(['北京', '天津', '上海', '重庆']);
+function normalizeCityGeoName(name: string) {
+  return name.endsWith('市')
+    || name.endsWith('区')
+    || name.endsWith('自治州')
+    || name.endsWith('地区')
+    || name.endsWith('盟')
+    || name.endsWith('县')
+    ? name
+    : `${name}市`;
+}
 
 const CITIES: LocationOption[] = CHINA_PROVINCES.flatMap(p =>
-  p.cities
-    .filter(c => {
-      // Skip the single city entry for 直辖市 (e.g. "北京市") —
-      // those are already covered by the province option.
-      if (ZHIXIASHI.has(p.name) && c.name === p.name + '市') return false;
-      return true;
-    })
-    .map(c => ({
+  p.cities.length > 0
+    ? p.cities.map(c => ({
       type: 'city' as const,
-      // Normalise to DataV "XXX市" format
-      name: c.name.endsWith('市') || c.name.endsWith('区') || c.name.endsWith('自治州') || c.name.endsWith('地区') || c.name.endsWith('盟') || c.name.endsWith('县')
-        ? c.name : c.name + '市',
+      name: normalizeCityGeoName(c.name),
       label: c.name,
       coords: [c.lat, c.lng] as [number, number],
     }))
+    : [{
+      type: 'city' as const,
+      name: getProvinceGeoJsonName(p.name),
+      label: p.name,
+      coords: [p.lat, p.lng] as [number, number],
+    }]
 );
 
+export const TOTAL_TRACKABLE_CHINA_CITIES = CITIES.length;
+
 const allLocations: LocationOption[] = [...COUNTRIES, ...PROVINCES, ...CITIES];
+const provinceGeoNameByCityName = new Map<string, string>();
+const provinceLabelByCityName = new Map<string, string>();
+
+for (const province of CHINA_PROVINCES) {
+  const provinceGeoName = getProvinceGeoJsonName(province.name);
+
+  if (province.cities.length === 0) {
+    provinceGeoNameByCityName.set(provinceGeoName, provinceGeoName);
+    provinceLabelByCityName.set(provinceGeoName, province.name);
+    continue;
+  }
+
+  for (const city of province.cities) {
+    const cityGeoName = normalizeCityGeoName(city.name);
+    provinceGeoNameByCityName.set(cityGeoName, provinceGeoName);
+    provinceLabelByCityName.set(cityGeoName, province.name);
+  }
+}
 
 function findLocationOption(location: Pick<JourneyLocation, 'type' | 'name' | 'label'>): LocationOption | undefined {
   return allLocations.find(option =>
@@ -112,11 +137,34 @@ export function resolveJourneyLocationCoords(location: JourneyLocation): [number
   return location.coords ?? findLocationOption(location)?.coords;
 }
 
+export function getProvinceGeoNameByCityName(cityName: string): string | null {
+  return provinceGeoNameByCityName.get(cityName) ?? null;
+}
+
+export function getProvinceLabelByCityName(cityName: string): string | null {
+  return provinceLabelByCityName.get(cityName) ?? null;
+}
+
+export function getCountryNameForLocation(location: Pick<JourneyLocation, 'type' | 'name'>): string | null {
+  if (location.type === 'country') {
+    return location.name === '中华人民共和国' ? CHINA_COUNTRY_NAME : location.name;
+  }
+
+  if (location.type === 'province' || location.type === 'city') {
+    return CHINA_COUNTRY_NAME;
+  }
+
+  return null;
+}
+
 /** Case-insensitive fuzzy search over label + name */
-export function searchLocations(query: string): LocationOption[] {
+export function searchLocations(query: string, allowedTypes?: JourneyLocation['type'][]): LocationOption[] {
   if (!query.trim()) return [];
   const q = query.toLowerCase();
+  const allowedTypeSet = allowedTypes?.length ? new Set(allowedTypes) : null;
+
   return allLocations.filter(
-    l => l.label.includes(query) || l.name.toLowerCase().includes(q)
+    l => (!allowedTypeSet || allowedTypeSet.has(l.type))
+      && (l.label.includes(query) || l.name.toLowerCase().includes(q))
   ).slice(0, 12);
 }

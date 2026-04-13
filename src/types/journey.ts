@@ -24,5 +24,6 @@ export interface Journey {
 export interface UserJourneyRecord {
   userId: string;
   userName: string;
+  birthplace?: JourneyLocation | null;
   journeys: Journey[];
 }

@@ -1,11 +1,11 @@
 import { CHINA_PROVINCES } from '../data/chinaData';
 import { getProvinceGeoJsonName } from '../data/chinaProvinceMeta';
+import { getCountryNameForLocation, getProvinceLabelByCityName, TOTAL_TRACKABLE_CHINA_CITIES } from '../data/locationData';
 import type { Journey } from '../types/journey';
 
-const CHINA_COUNTRY_NAME = 'China';
 const TOTAL_WORLD_COUNTRIES = 176;
 const TOTAL_CHINA_PROVINCES = CHINA_PROVINCES.length;
-const TOTAL_CHINA_CITIES = CHINA_PROVINCES.reduce((sum, province) => sum + province.cities.length, 0);
+const TOTAL_CHINA_CITIES = TOTAL_TRACKABLE_CHINA_CITIES;
 
 const provinceLabelByName = new Map<string, string>();
 const provinceByCityName = new Map<string, string>();
@@ -39,11 +39,6 @@ function toProvinceLabel(name: string): string | null {
   return provinceLabelByName.get(name) ?? null;
 }
 
-function getCountryName(name: string): string {
-  if (name === '中华人民共和国') return CHINA_COUNTRY_NAME;
-  return name;
-}
-
 export function getTravelStats(journeys: Journey[]): TravelStats {
   const visitedCountries = new Set<string>();
   const visitedProvinces = new Set<string>();
@@ -51,23 +46,23 @@ export function getTravelStats(journeys: Journey[]): TravelStats {
 
   for (const journey of journeys) {
     for (const location of journey.locations ?? []) {
+      const countryName = getCountryNameForLocation(location);
+      if (countryName) visitedCountries.add(countryName);
+
       if (location.type === 'country') {
-        visitedCountries.add(getCountryName(location.name));
         continue;
       }
 
       if (location.type === 'province') {
         const provinceLabel = toProvinceLabel(location.name);
         if (provinceLabel) visitedProvinces.add(provinceLabel);
-        visitedCountries.add(CHINA_COUNTRY_NAME);
         continue;
       }
 
       if (location.type === 'city') {
         visitedCities.add(location.name);
-        const provinceLabel = provinceByCityName.get(location.name);
+        const provinceLabel = getProvinceLabelByCityName(location.name) ?? provinceByCityName.get(location.name);
         if (provinceLabel) visitedProvinces.add(provinceLabel);
-        visitedCountries.add(CHINA_COUNTRY_NAME);
       }
     }
   }

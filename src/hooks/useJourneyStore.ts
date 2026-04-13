@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Journey, UserJourneyRecord } from '../types/journey';
+import type { Journey, JourneyLocation, UserJourneyRecord } from '../types/journey';
 
 const STORAGE_KEY = 'travel_globe_journeys';
 const ARCHIVE_STORAGE_KEY = 'travel_globe_archive';
 const DEFAULT_USER_RECORD: UserJourneyRecord = {
   userId: 'me',
   userName: '我',
+  birthplace: null,
   journeys: [],
 };
 
@@ -20,10 +21,14 @@ interface LegacyJourneyArchive {
   travelers: LegacyTravelerProfile[];
 }
 
+function cloneLocation(location: JourneyLocation): JourneyLocation {
+  return { ...location };
+}
+
 function cloneJourney(journey: Journey): Journey {
   return {
     ...journey,
-    locations: journey.locations.map(location => ({ ...location })),
+    locations: journey.locations.map(cloneLocation),
   };
 }
 
@@ -31,6 +36,7 @@ function cloneRecord(record: UserJourneyRecord): UserJourneyRecord {
   return {
     userId: record.userId,
     userName: record.userName,
+    birthplace: record.birthplace ? cloneLocation(record.birthplace) : null,
     journeys: record.journeys.map(cloneJourney),
   };
 }
@@ -69,6 +75,7 @@ function isUserJourneyRecord(value: unknown): value is UserJourneyRecord {
   return (
     typeof candidate.userId === 'string' &&
     typeof candidate.userName === 'string' &&
+    (candidate.birthplace === undefined || candidate.birthplace === null || isJourneyLocation(candidate.birthplace)) &&
     Array.isArray(candidate.journeys) &&
     candidate.journeys.every(isJourney)
   );
@@ -101,7 +108,10 @@ function normalizeRecord(record: UserJourneyRecord): UserJourneyRecord {
   return {
     userId: record.userId.trim() || DEFAULT_USER_RECORD.userId,
     userName: record.userName.trim() || DEFAULT_USER_RECORD.userName,
-    journeys: record.journeys.filter(isJourney),
+    birthplace: record.birthplace && isJourneyLocation(record.birthplace)
+      ? cloneLocation(record.birthplace)
+      : null,
+    journeys: record.journeys.filter(isJourney).map(cloneJourney),
   };
 }
 
@@ -169,10 +179,32 @@ export function useJourneyStore() {
     }));
   };
 
+  const updateJourney = (id: string, journey: Omit<Journey, 'id'>) => {
+    setRecord(current => ({
+      ...current,
+      journeys: current.journeys.map(existingJourney => (
+        existingJourney.id === id
+          ? {
+              ...existingJourney,
+              ...journey,
+              locations: journey.locations.map(location => ({ ...location })),
+            }
+          : existingJourney
+      )),
+    }));
+  };
+
   const deleteJourney = (id: string) => {
     setRecord(current => ({
       ...current,
       journeys: current.journeys.filter(journey => journey.id !== id),
+    }));
+  };
+
+  const setBirthplace = (birthplace: JourneyLocation | null) => {
+    setRecord(current => ({
+      ...current,
+      birthplace: birthplace ? cloneLocation(birthplace) : null,
     }));
   };
 
@@ -190,9 +222,12 @@ export function useJourneyStore() {
     record,
     userId: record.userId,
     userName: record.userName,
+    birthplace: record.birthplace ?? null,
     journeys,
     addJourney,
+    updateJourney,
     deleteJourney,
+    setBirthplace,
     exportRecord,
   };
 }
