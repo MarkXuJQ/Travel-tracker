@@ -11,6 +11,7 @@ interface Props {
   placeholder?: string;
   helperText?: string | null;
   showOrderHint?: boolean;
+  compact?: boolean;
 }
 
 const TYPE_LABEL: Record<JourneyLocation['type'], string> = {
@@ -33,6 +34,7 @@ export default function LocationPicker({
   placeholder = '搜索城市、省份或国家',
   helperText = null,
   showOrderHint = true,
+  compact = false,
 }: Props) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<LocationOption[]>([]);
@@ -80,9 +82,9 @@ export default function LocationPicker({
   };
 
   return (
-    <div ref={wrapperRef} className="space-y-3">
+    <div ref={wrapperRef} className={compact ? 'space-y-2' : 'space-y-3'}>
       {value.length > 0 && (
-        <div className="space-y-2">
+        <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
           {showOrderHint && !isSingleSelect && value.length > 1 && (
             <p className="text-xs leading-5 text-stone-500">
               多城市旅程请按实际先后顺序添加，地图会按照这个顺序预览路线。要调整顺序，删除后重新添加即可。
@@ -93,7 +95,9 @@ export default function LocationPicker({
             {value.map((location, index) => (
               <span
                 key={`${location.type}:${location.name}`}
-                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white/85 px-3 py-1.5 text-sm text-stone-700 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.5)]"
+                className={`inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white/85 text-stone-700 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.5)] ${
+                  compact ? 'px-2.5 py-1 text-[13px]' : 'px-3 py-1.5 text-sm'
+                }`}
               >
                 {showOrderHint && !isSingleSelect && value.length > 1 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-[10px] font-medium text-stone-500">
@@ -121,7 +125,11 @@ export default function LocationPicker({
           ref={inputRef}
           type="text"
           placeholder={placeholder}
-          className="w-full rounded-2xl border border-stone-200 bg-white/90 px-4 py-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
+          className={`w-full border border-stone-200 bg-white/90 text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-900 ${
+            compact
+              ? 'rounded-xl px-3.5 py-2.5 text-[13px]'
+              : 'rounded-2xl px-4 py-3 text-sm'
+          }`}
           value={query}
           onChange={event => setQuery(event.target.value)}
           onFocus={() => {
@@ -130,14 +138,18 @@ export default function LocationPicker({
         />
 
         {open && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-[22px] border border-stone-200 bg-[#fcfbf8] shadow-[0_22px_40px_-28px_rgba(15,23,42,0.45)]">
+          <div className={`absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden border border-stone-200 bg-[#fcfbf8] shadow-[0_22px_40px_-28px_rgba(15,23,42,0.45)] ${
+            compact ? 'rounded-xl' : 'rounded-[22px]'
+          }`}>
             {suggestions.length > 0 ? (
-              <div className="max-h-56 overflow-y-auto p-2">
+              <div className={`max-h-56 overflow-y-auto ${compact ? 'p-1.5' : 'p-2'}`}>
                 {suggestions.map(option => (
                   <button
                     key={option.name}
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-stone-100/80"
+                    className={`flex w-full items-center gap-3 text-left transition hover:bg-stone-100/80 ${
+                      compact ? 'rounded-xl px-2.5 py-2' : 'rounded-2xl px-3 py-2.5'
+                    }`}
                     onMouseDown={event => {
                       event.preventDefault();
                       select(option);
@@ -166,7 +178,7 @@ export default function LocationPicker({
       </div>
 
       {(helperText || (showOrderHint && !isSingleSelect && value.length <= 1)) && (
-        <div className="space-y-1 px-1">
+        <div className={`space-y-1 ${compact ? '' : 'px-1'}`}>
           {helperText && (
             <p className="text-xs leading-5 text-stone-500">{helperText}</p>
           )}

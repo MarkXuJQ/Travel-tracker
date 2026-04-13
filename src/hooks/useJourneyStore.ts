@@ -25,9 +25,35 @@ function cloneLocation(location: JourneyLocation): JourneyLocation {
   return { ...location };
 }
 
+function cloneOptionalLocation(location?: JourneyLocation | null): JourneyLocation | null {
+  return location ? cloneLocation(location) : null;
+}
+
+function inferJourneyEndpoints(locations: JourneyLocation[]): {
+  departure: JourneyLocation | null;
+  destination: JourneyLocation | null;
+} {
+  const firstLocation = locations[0] ? cloneLocation(locations[0]) : null;
+  const lastLocation = locations[locations.length - 1] ? cloneLocation(locations[locations.length - 1]) : firstLocation;
+
+  return {
+    departure: firstLocation,
+    destination: lastLocation,
+  };
+}
+
 function cloneJourney(journey: Journey): Journey {
+  const inferredEndpoints = inferJourneyEndpoints(journey.locations);
+  const departure = cloneOptionalLocation(journey.departure) ?? inferredEndpoints.departure;
+  const destination = cloneOptionalLocation(journey.destination) ?? inferredEndpoints.destination;
+  const shouldShowEndpoints = journey.showEndpoints ?? journey.locations.length <= 2;
+
   return {
     ...journey,
+    transportMode: journey.transportMode ?? 'train',
+    showEndpoints: Boolean(shouldShowEndpoints && departure && destination),
+    departure,
+    destination,
     locations: journey.locations.map(cloneLocation),
   };
 }
@@ -63,6 +89,10 @@ function isJourney(value: unknown): value is Journey {
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.title === 'string' &&
+    (candidate.transportMode === undefined || candidate.transportMode === 'train' || candidate.transportMode === 'flight') &&
+    (candidate.showEndpoints === undefined || typeof candidate.showEndpoints === 'boolean') &&
+    (candidate.departure === undefined || candidate.departure === null || isJourneyLocation(candidate.departure)) &&
+    (candidate.destination === undefined || candidate.destination === null || isJourneyLocation(candidate.destination)) &&
     Array.isArray(candidate.locations) &&
     candidate.locations.every(isJourneyLocation)
   );
@@ -172,7 +202,10 @@ export function useJourneyStore() {
   const journeys = useMemo(() => record.journeys, [record.journeys]);
 
   const addJourney = (journey: Omit<Journey, 'id'>) => {
-    const newJourney: Journey = { ...journey, id: crypto.randomUUID() };
+    const newJourney = cloneJourney({
+      ...journey,
+      id: crypto.randomUUID(),
+    });
     setRecord(current => ({
       ...current,
       journeys: [newJourney, ...current.journeys],
@@ -184,11 +217,10 @@ export function useJourneyStore() {
       ...current,
       journeys: current.journeys.map(existingJourney => (
         existingJourney.id === id
-          ? {
+          ? cloneJourney({
               ...existingJourney,
               ...journey,
-              locations: journey.locations.map(location => ({ ...location })),
-            }
+            })
           : existingJourney
       )),
     }));

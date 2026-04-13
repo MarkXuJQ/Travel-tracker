@@ -122,14 +122,14 @@ function buildProvincePaint(provinces: string[], tone: MapTone): any {
 
   if (tone === 'night') {
     return {
-      'fill-color': ['match', ['get', 'name'], provinces, '#7dd3fc', 'transparent'],
-      'fill-opacity': ['match', ['get', 'name'], provinces, 0.1, 0],
+      'fill-color': ['match', ['get', 'name'], provinces, '#8dc8ff', 'transparent'],
+      'fill-opacity': ['match', ['get', 'name'], provinces, 0.16, 0],
     };
   }
 
   return {
-    'fill-color': ['match', ['get', 'name'], provinces, '#d6c9b4', 'transparent'],
-    'fill-opacity': ['match', ['get', 'name'], provinces, 0.16, 0],
+    'fill-color': ['match', ['get', 'name'], provinces, '#cdb79b', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], provinces, 0.24, 0],
   };
 }
 
@@ -205,6 +205,7 @@ function buildCityGlowPaint(highlighted: string[], tone: MapTone): any {
 interface Props {
   journeys: Journey[];
   birthplace?: JourneyLocation | null;
+  showProvinceHighlights?: boolean;
   baseMap?: BaseMapMode;
   selectedJourney?: Journey | null;
   panelOpen?: boolean;
@@ -340,6 +341,7 @@ function getRouteBounds(stops: RouteStop[]) {
 export default function TravelMap({
   journeys,
   birthplace = null,
+  showProvinceHighlights = true,
   baseMap = 'liberty',
   selectedJourney = null,
   panelOpen = false,
@@ -378,7 +380,10 @@ export default function TravelMap({
     () => buildWorldPaint(countries, mapTheme.tone, birthplaceCountry),
     [birthplaceCountry, countries, mapTheme.tone],
   );
-  const provincePaint = useMemo(() => buildProvincePaint(provinces, mapTheme.tone), [provinces, mapTheme.tone]);
+  const provincePaint = useMemo(
+    () => (showProvinceHighlights ? buildProvincePaint(provinces, mapTheme.tone) : { 'fill-color': 'transparent', 'fill-opacity': 0 }),
+    [mapTheme.tone, provinces, showProvinceHighlights],
+  );
   const highlightedCityNames = useMemo(() => {
     if (!cityData) return [];
     return getHighlightedCityNames(cityData.features as GeoJSON.Feature[], cities, provinces);

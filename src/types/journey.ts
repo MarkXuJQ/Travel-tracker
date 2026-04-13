@@ -1,3 +1,5 @@
+export type JourneyTransportMode = 'train' | 'flight';
+
 export interface JourneyLocation {
   type: 'country' | 'province' | 'city';
   /** GeoJSON-matching name:
@@ -16,6 +18,10 @@ export interface Journey {
   id: string;
   title: string;
   date?: string;
+  transportMode?: JourneyTransportMode;
+  showEndpoints?: boolean;
+  departure?: JourneyLocation | null;
+  destination?: JourneyLocation | null;
   locations: JourneyLocation[];
   description?: string;
   url?: string;
