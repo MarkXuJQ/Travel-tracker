@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Journey, JourneyLocation, UserJourneyRecord } from '../types/journey';
+import { normalizeJourneyDate } from '../utils/journeyDate';
 
 const STORAGE_KEY = 'travel_globe_journeys';
 const ARCHIVE_STORAGE_KEY = 'travel_globe_archive';
@@ -46,11 +47,13 @@ function cloneJourney(journey: Journey): Journey {
   const inferredEndpoints = inferJourneyEndpoints(journey.locations);
   const departure = cloneOptionalLocation(journey.departure) ?? inferredEndpoints.departure;
   const destination = cloneOptionalLocation(journey.destination) ?? inferredEndpoints.destination;
-  const shouldShowEndpoints = journey.showEndpoints ?? journey.locations.length <= 2;
+  const transportMode = journey.transportMode ?? (journey.showEndpoints === false ? 'default' : 'train');
+  const shouldShowEndpoints = journey.showEndpoints ?? (transportMode !== 'default' && journey.locations.length <= 2);
 
   return {
     ...journey,
-    transportMode: journey.transportMode ?? 'train',
+    date: journey.date ? normalizeJourneyDate(journey.date) ?? journey.date.trim() : undefined,
+    transportMode,
     showEndpoints: Boolean(shouldShowEndpoints && departure && destination),
     departure,
     destination,
@@ -89,7 +92,7 @@ function isJourney(value: unknown): value is Journey {
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.title === 'string' &&
-    (candidate.transportMode === undefined || candidate.transportMode === 'train' || candidate.transportMode === 'flight') &&
+    (candidate.transportMode === undefined || candidate.transportMode === 'default' || candidate.transportMode === 'train' || candidate.transportMode === 'flight') &&
     (candidate.showEndpoints === undefined || typeof candidate.showEndpoints === 'boolean') &&
     (candidate.departure === undefined || candidate.departure === null || isJourneyLocation(candidate.departure)) &&
     (candidate.destination === undefined || candidate.destination === null || isJourneyLocation(candidate.destination)) &&

@@ -1,4 +1,4 @@
-export type JourneyTransportMode = 'train' | 'flight';
+export type JourneyTransportMode = 'default' | 'train' | 'flight';
 
 export interface JourneyLocation {
   type: 'country' | 'province' | 'city';
