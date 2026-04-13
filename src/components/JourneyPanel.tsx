@@ -11,6 +11,8 @@ interface Props {
   addJourney: (journey: Omit<Journey, 'id'>) => void;
   deleteJourney: (id: string) => void;
   exportRecord: () => void;
+  selectedJourneyId: string | null;
+  onSelectJourney: (id: string) => void;
 }
 
 const emptyForm = (): Omit<Journey, 'id'> => ({
@@ -92,6 +94,8 @@ export default function JourneyPanel({
   addJourney,
   deleteJourney,
   exportRecord,
+  selectedJourneyId,
+  onSelectJourney,
 }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
@@ -388,7 +392,7 @@ export default function JourneyPanel({
                   <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Archive</p>
                   <h3 className="font-editorial mt-2 text-[1.65rem] leading-none text-stone-900">旅程档案</h3>
                 </div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-stone-500">Latest First</p>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-stone-500">按时间倒序 · 点击条目预览路线</p>
               </div>
 
               <div className="mt-5">
@@ -402,7 +406,14 @@ export default function JourneyPanel({
                 ) : (
                   <div className="divide-y divide-stone-200/80 border-y border-stone-200/80 bg-[#fcf8f1]">
                     {sortedJourneys.map((journey, index) => (
-                      <JourneyCard key={journey.id} journey={journey} index={index} onDelete={deleteJourney} />
+                      <JourneyCard
+                        key={journey.id}
+                        journey={journey}
+                        index={index}
+                        onDelete={deleteJourney}
+                        selected={journey.id === selectedJourneyId}
+                        onSelect={() => onSelectJourney(journey.id)}
+                      />
                     ))}
                   </div>
                 )}
@@ -512,17 +523,43 @@ function JourneyCard({
   journey,
   index,
   onDelete,
+  selected,
+  onSelect,
 }: {
   journey: Journey;
   index: number;
   onDelete: (id: string) => void;
+  selected: boolean;
+  onSelect: () => void;
 }) {
+  const hasRoutePreview = journey.locations.filter(location => location.type === 'city').length > 1
+    || journey.locations.filter(location => location.coords).length > 1;
+
   return (
-    <article className="group relative bg-[#fcf8f1] px-4 py-5 transition-colors hover:bg-[#fdfaf5]">
+    <article
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      className={`group relative px-4 py-5 text-left outline-none transition ${
+        selected
+          ? 'bg-[#f5efe4] shadow-[inset_0_0_0_1px_rgba(120,113,108,0.16)]'
+          : 'bg-[#fcf8f1] hover:bg-[#fdfaf5]'
+      }`}
+      onClick={onSelect}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
       <button
         type="button"
         className="absolute right-4 top-5 flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-stone-300 transition hover:border-stone-200/80 hover:bg-white/70 hover:text-red-500"
-        onClick={() => onDelete(journey.id)}
+        onClick={event => {
+          event.stopPropagation();
+          onDelete(journey.id);
+        }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -542,6 +579,7 @@ function JourneyCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="transition hover:text-stone-700"
+                  onClick={event => event.stopPropagation()}
                 >
                   {journey.title}
                 </a>
@@ -549,6 +587,9 @@ function JourneyCard({
                 journey.title
               )}
             </h4>
+            <p className={`mt-2 text-[10px] uppercase tracking-[0.24em] ${selected ? 'text-stone-700' : 'text-stone-400'}`}>
+              {selected ? (hasRoutePreview ? '路线预览中' : '地点预览中') : (hasRoutePreview ? '点击查看路线' : '点击定位地点')}
+            </p>
           </div>
 
           {journey.date && (

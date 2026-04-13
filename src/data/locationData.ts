@@ -102,6 +102,16 @@ const CITIES: LocationOption[] = CHINA_PROVINCES.flatMap(p =>
 
 const allLocations: LocationOption[] = [...COUNTRIES, ...PROVINCES, ...CITIES];
 
+function findLocationOption(location: Pick<JourneyLocation, 'type' | 'name' | 'label'>): LocationOption | undefined {
+  return allLocations.find(option =>
+    option.type === location.type && (option.name === location.name || option.label === location.label)
+  );
+}
+
+export function resolveJourneyLocationCoords(location: JourneyLocation): [number, number] | undefined {
+  return location.coords ?? findLocationOption(location)?.coords;
+}
+
 /** Case-insensitive fuzzy search over label + name */
 export function searchLocations(query: string): LocationOption[] {
   if (!query.trim()) return [];

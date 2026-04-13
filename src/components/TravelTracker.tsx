@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useJourneyStore } from '../hooks/useJourneyStore';
 import TravelMap, { type BaseMapMode } from './TravelMap';
 import JourneyPanel from './JourneyPanel';
@@ -34,11 +34,31 @@ export default function TravelTracker() {
     window.localStorage.setItem(BASE_MAP_STORAGE_KEY, baseMap);
   }, [baseMap]);
 
+  const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedJourneyId && !journeys.some(journey => journey.id === selectedJourneyId)) {
+      setSelectedJourneyId(null);
+    }
+  }, [journeys, selectedJourneyId]);
+
+  const selectedJourney = useMemo(
+    () => journeys.find(journey => journey.id === selectedJourneyId) ?? null,
+    [journeys, selectedJourneyId],
+  );
+
+  const handleDeleteJourney = (id: string) => {
+    if (selectedJourneyId === id) {
+      setSelectedJourneyId(null);
+    }
+    deleteJourney(id);
+  };
+
   const isNightMode = baseMap === 'night';
 
   return (
     <div className="w-full h-full relative">
-      <TravelMap journeys={journeys} baseMap={baseMap} />
+      <TravelMap journeys={journeys} baseMap={baseMap} selectedJourney={selectedJourney} panelOpen={panelOpen} />
 
       <div
         className={`absolute top-4 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-lg backdrop-blur-md ${
@@ -100,8 +120,12 @@ export default function TravelTracker() {
         userName={userName}
         journeys={journeys}
         addJourney={addJourney}
-        deleteJourney={deleteJourney}
+        deleteJourney={handleDeleteJourney}
         exportRecord={exportRecord}
+        selectedJourneyId={selectedJourneyId}
+        onSelectJourney={journeyId => {
+          setSelectedJourneyId(current => (current === journeyId ? null : journeyId));
+        }}
       />
     </div>
   );

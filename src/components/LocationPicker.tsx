@@ -61,24 +61,37 @@ export default function LocationPicker({ value, onChange }: Props) {
   return (
     <div ref={wrapperRef} className="space-y-3">
       {value.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {value.map(location => (
-            <span
-              key={location.name}
-              className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white/85 px-3 py-1.5 text-sm text-stone-700 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.5)]"
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${TYPE_DOT[location.type]}`} />
-              <span className="text-[10px] uppercase tracking-[0.22em] text-stone-400">{TYPE_LABEL[location.type]}</span>
-              <span>{location.label}</span>
-              <button
-                type="button"
-                className="ml-1 text-stone-400 transition hover:text-stone-900"
-                onClick={() => remove(location.name)}
+        <div className="space-y-2">
+          {value.length > 1 && (
+            <p className="text-xs leading-5 text-stone-500">
+              多城市旅程请按实际先后顺序添加，地图会按照这个顺序预览路线。要调整顺序，删除后重新添加即可。
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {value.map((location, index) => (
+              <span
+                key={location.name}
+                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white/85 px-3 py-1.5 text-sm text-stone-700 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.5)]"
               >
-                ×
-              </button>
-            </span>
-          ))}
+                {value.length > 1 && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-[10px] font-medium text-stone-500">
+                    {index + 1}
+                  </span>
+                )}
+                <span className={`h-1.5 w-1.5 rounded-full ${TYPE_DOT[location.type]}`} />
+                <span className="text-[10px] uppercase tracking-[0.22em] text-stone-400">{TYPE_LABEL[location.type]}</span>
+                <span>{location.label}</span>
+                <button
+                  type="button"
+                  className="ml-1 text-stone-400 transition hover:text-stone-900"
+                  onClick={() => remove(location.name)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -130,6 +143,12 @@ export default function LocationPicker({ value, onChange }: Props) {
           </div>
         )}
       </div>
+
+      {value.length <= 1 && (
+        <p className="px-1 text-xs leading-5 text-stone-500">
+          如果一段旅程会经过多个城市，请按出发到抵达的顺序依次添加。
+        </p>
+      )}
     </div>
   );
 }

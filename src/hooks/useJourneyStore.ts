@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { currentUserJourney } from '../data/currentUserJourney';
 import type { Journey, UserJourneyRecord } from '../types/journey';
 
 const STORAGE_KEY = 'travel_globe_journeys';
 const ARCHIVE_STORAGE_KEY = 'travel_globe_archive';
+const DEFAULT_USER_RECORD: UserJourneyRecord = {
+  userId: 'me',
+  userName: '我',
+  journeys: [],
+};
 
 interface LegacyTravelerProfile {
   id: string;
@@ -32,7 +36,7 @@ function cloneRecord(record: UserJourneyRecord): UserJourneyRecord {
 }
 
 function createEmptyRecord(): UserJourneyRecord {
-  return cloneRecord(currentUserJourney);
+  return cloneRecord(DEFAULT_USER_RECORD);
 }
 
 function isJourneyLocation(value: unknown): value is Journey['locations'][number] {
@@ -95,8 +99,8 @@ function isLegacyJourneyArchive(value: unknown): value is LegacyJourneyArchive {
 
 function normalizeRecord(record: UserJourneyRecord): UserJourneyRecord {
   return {
-    userId: record.userId.trim() || currentUserJourney.userId,
-    userName: record.userName.trim() || currentUserJourney.userName,
+    userId: record.userId.trim() || DEFAULT_USER_RECORD.userId,
+    userName: record.userName.trim() || DEFAULT_USER_RECORD.userName,
     journeys: record.journeys.filter(isJourney),
   };
 }
@@ -107,8 +111,8 @@ function migrateLegacyArchive(archive: LegacyJourneyArchive): UserJourneyRecord 
   if (!selectedTraveler) return createEmptyRecord();
 
   return normalizeRecord({
-    userId: selectedTraveler.id || currentUserJourney.userId,
-    userName: selectedTraveler.name || currentUserJourney.userName,
+    userId: selectedTraveler.id || DEFAULT_USER_RECORD.userId,
+    userName: selectedTraveler.name || DEFAULT_USER_RECORD.userName,
     journeys: selectedTraveler.journeys,
   });
 }
