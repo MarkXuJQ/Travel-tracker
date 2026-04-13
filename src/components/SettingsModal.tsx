@@ -8,10 +8,12 @@ interface Props {
   baseMap: BaseMapMode;
   showProvinceHighlights: boolean;
   birthplace: JourneyLocation | null;
+  passengerName: string;
   onClose: () => void;
   onBaseMapChange: (mode: BaseMapMode) => void;
   onProvinceHighlightChange: (enabled: boolean) => void;
   onBirthplaceChange: (birthplace: JourneyLocation | null) => void;
+  onPassengerNameChange: (passengerName: string) => void;
 }
 
 const BASE_MAP_OPTIONS: Array<{ key: BaseMapMode; label: string; description: string }> = [
@@ -25,10 +27,12 @@ export default function SettingsModal({
   baseMap,
   showProvinceHighlights,
   birthplace,
+  passengerName,
   onClose,
   onBaseMapChange,
   onProvinceHighlightChange,
   onBirthplaceChange,
+  onPassengerNameChange,
 }: Props) {
   const [isEditingHometown, setIsEditingHometown] = useState(false);
 
@@ -212,6 +216,30 @@ export default function SettingsModal({
               <p className="text-xs leading-5 text-stone-500">
                 家乡不会生成旅程记录，只用来保留起点所在国家的原始底图。
               </p>
+            </section>
+
+            <section className="space-y-3">
+              <div className="border-b border-stone-200/70 pb-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Boarding Pass</p>
+                  <h3 className="mt-2 text-base font-medium text-stone-900">乘机人</h3>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-stone-200/80 bg-white/72 px-4 py-3">
+                <input
+                  type="text"
+                  value={passengerName}
+                  onChange={event => onPassengerNameChange(event.target.value)}
+                  onBlur={event => {
+                    if (event.target.value !== event.target.value.trim()) {
+                      onPassengerNameChange(event.target.value.trim());
+                    }
+                  }}
+                  placeholder="填入机票展示的乘机人"
+                  className="w-full bg-transparent text-sm text-stone-800 outline-none placeholder:text-stone-400"
+                />
+              </div>
             </section>
           </div>
         </div>

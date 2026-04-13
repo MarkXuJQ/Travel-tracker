@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useJourneyStore } from '../hooks/useJourneyStore';
-import type { Journey } from '../types/journey';
+import type { Journey, JourneyRecordFilter } from '../types/journey';
+import { filterJourneysByRecordFilter, journeyMatchesRecordFilter } from '../utils/journeyRecordFilter';
 import SettingsModal from './SettingsModal';
 import TravelMap, { type BaseMapMode } from './TravelMap';
 import JourneyEditorModal from './JourneyEditorModal';
@@ -22,12 +23,13 @@ function isBaseMapMode(value: string | null): value is BaseMapMode {
 export default function TravelTracker() {
   const {
     journeys,
-    userName,
     birthplace,
+    passengerName,
     addJourney,
     updateJourney,
     deleteJourney,
     setBirthplace,
+    setPassengerName,
     exportRecord,
   } = useJourneyStore();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -51,6 +53,7 @@ export default function TravelTracker() {
   }, [showProvinceHighlights]);
 
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<JourneyRecordFilter | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorJourney, setEditorJourney] = useState<Journey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -60,6 +63,15 @@ export default function TravelTracker() {
       setSelectedJourneyId(null);
     }
   }, [journeys, selectedJourneyId]);
+
+  useEffect(() => {
+    if (!activeFilter || !selectedJourneyId) return;
+
+    const selectedJourney = journeys.find(journey => journey.id === selectedJourneyId);
+    if (!selectedJourney || !journeyMatchesRecordFilter(selectedJourney, activeFilter)) {
+      setSelectedJourneyId(null);
+    }
+  }, [activeFilter, journeys, selectedJourneyId]);
 
   useEffect(() => {
     if (!editorJourney) return;
@@ -118,6 +130,24 @@ export default function TravelTracker() {
     updateJourney(id, journey);
   };
 
+  const handleVisitedLocationSelect = (filter: JourneyRecordFilter) => {
+    const matchingJourneys = filterJourneysByRecordFilter(journeys, filter);
+
+    setActiveFilter(filter);
+    setPanelOpen(true);
+    setSelectedJourneyId(current => {
+      if (matchingJourneys.length === 1) {
+        return matchingJourneys[0].id;
+      }
+
+      if (current && matchingJourneys.some(journey => journey.id === current)) {
+        return current;
+      }
+
+      return null;
+    });
+  };
+
   const isNightMode = baseMap === 'night';
   const topControlsPosition = panelOpen ? 'right-4 sm:right-[32rem]' : 'right-4';
 
@@ -130,6 +160,7 @@ export default function TravelTracker() {
         baseMap={baseMap}
         selectedJourney={selectedJourney}
         panelOpen={panelOpen}
+        onVisitedLocationSelect={handleVisitedLocationSelect}
       />
 
       <div className={`absolute top-4 z-[2100] flex flex-col gap-2 transition-all ${topControlsPosition}`}>
@@ -192,6 +223,7 @@ export default function TravelTracker() {
       <JourneyEditorModal
         isOpen={editorOpen}
         journey={editorJourney}
+        passengerName={passengerName}
         onClose={closeJourneyEditor}
         onCreateJourney={handleCreateJourney}
         onUpdateJourney={handleUpdateJourney}
@@ -202,17 +234,20 @@ export default function TravelTracker() {
         baseMap={baseMap}
         showProvinceHighlights={showProvinceHighlights}
         birthplace={birthplace}
+        passengerName={passengerName}
         onClose={closeSettings}
         onBaseMapChange={setBaseMap}
         onProvinceHighlightChange={setShowProvinceHighlights}
         onBirthplaceChange={setBirthplace}
+        onPassengerNameChange={setPassengerName}
       />
 
       <JourneyPanel
         isOpen={panelOpen}
         onClose={() => setPanelOpen(false)}
-        userName={userName}
+        passengerName={passengerName}
         journeys={journeys}
+        activeFilter={activeFilter}
         deleteJourney={handleDeleteJourney}
         exportRecord={exportRecord}
         selectedJourneyId={selectedJourneyId}
@@ -221,6 +256,7 @@ export default function TravelTracker() {
           setSelectedJourneyId(current => (current === journeyId ? null : journeyId));
         }}
         onEditJourney={openEditJourneyEditor}
+        onClearFilter={() => setActiveFilter(null)}
       />
     </div>
   );

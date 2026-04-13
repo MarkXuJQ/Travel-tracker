@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
-import { normalizeJourneyDate, parseJourneyDate } from '../utils/journeyDate';
+import { formatJourneyDate, normalizeJourneyDate, parseJourneyDate } from '../utils/journeyDate';
 import TransportModeIcon from './TransportModeIcon';
 import LocationPicker from './LocationPicker';
 
 interface Props {
   isOpen: boolean;
   journey: Journey | null;
+  passengerName: string;
   onClose: () => void;
   onCreateJourney: (journey: Omit<Journey, 'id'>) => void;
   onUpdateJourney: (id: string, journey: Omit<Journey, 'id'>) => void;
@@ -159,17 +160,23 @@ function JourneyFormatSlider({
 
 function TicketPreviewEditor({
   mode,
+  dateLabel,
+  passengerName,
   departure,
   destination,
   onDepartureChange,
   onDestinationChange,
 }: {
   mode: Exclude<JourneyTransportMode, 'default'>;
+  dateLabel: string;
+  passengerName: string;
   departure: JourneyLocation | null;
   destination: JourneyLocation | null;
   onDepartureChange: (locations: JourneyLocation[]) => void;
   onDestinationChange: (locations: JourneyLocation[]) => void;
 }) {
+  const displayPassengerName = passengerName.trim() || '未设置';
+
   if (mode === 'flight') {
     return (
       <div className="relative overflow-hidden rounded-[28px] border border-[#e6d7bc] shadow-[0_24px_44px_-34px_rgba(217,119,6,0.28)]">
@@ -202,7 +209,7 @@ function TicketPreviewEditor({
 
               <div className="shrink-0 text-right">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
-                <p className="font-tabular mt-2 text-sm text-stone-800">2026.02.03</p>
+                <p className="font-tabular mt-2 text-sm text-stone-800">{dateLabel}</p>
               </div>
             </div>
 
@@ -268,6 +275,11 @@ function TicketPreviewEditor({
                 <p className="mt-1 text-xs font-medium text-stone-800">Stub</p>
               </div>
             </div>
+
+            <div className="relative w-full text-center">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Passenger</p>
+              <p className="mt-1 break-words text-[11px] font-medium leading-4 text-stone-900">{displayPassengerName}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -283,9 +295,16 @@ function TicketPreviewEditor({
       </div>
 
       <div className="relative px-5 pb-10 pt-5">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#d33f49]">Z31C014941</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-sky-950/70">中国旅程车票</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#d33f49]">Z31C014941</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-sky-950/70">中国旅程车票</p>
+          </div>
+
+          <div className="shrink-0 text-right">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
+            <p className="font-tabular mt-2 text-sm text-stone-800">{dateLabel}</p>
+          </div>
         </div>
 
         <div className="mt-7 flex items-end justify-between gap-3 text-stone-950">
@@ -341,6 +360,7 @@ function TicketPreviewEditor({
 export default function JourneyEditorModal({
   isOpen,
   journey,
+  passengerName,
   onClose,
   onCreateJourney,
   onUpdateJourney,
@@ -356,6 +376,7 @@ export default function JourneyEditorModal({
   const dateInput = form.date?.trim() ?? '';
   const parsedDate = parseJourneyDate(dateInput);
   const hasValidDate = dateInput === '' || parsedDate.isValid;
+  const formattedTicketDate = dateInput && parsedDate.isValid ? formatJourneyDate(dateInput) : '--.--.--';
   const canSubmit = Boolean(form.title.trim() && hasJourneyLocations && hasValidDate);
 
   useEffect(() => {
@@ -541,6 +562,8 @@ export default function JourneyEditorModal({
                   <div className="pt-1">
                     <TicketPreviewEditor
                       mode={selectedFormat}
+                      dateLabel={formattedTicketDate}
+                      passengerName={passengerName}
                       departure={form.departure ?? null}
                       destination={form.destination ?? null}
                       onDepartureChange={locations => setSingleLocation('departure', locations)}

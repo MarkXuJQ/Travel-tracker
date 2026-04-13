@@ -1,9 +1,14 @@
 import { CHINA_PROVINCES } from '../data/chinaData';
 import { getProvinceGeoJsonName } from '../data/chinaProvinceMeta';
-import { getCountryNameForLocation, getProvinceLabelByCityName, TOTAL_TRACKABLE_CHINA_CITIES } from '../data/locationData';
+import {
+  getCountryNameForLocation,
+  getProvinceLabelByCityName,
+  TOTAL_TRACKABLE_CHINA_CITIES,
+  TOTAL_TRACKABLE_WORLD_COUNTRIES,
+} from '../data/locationData';
 import type { Journey } from '../types/journey';
 
-const TOTAL_WORLD_COUNTRIES = 176;
+const TOTAL_WORLD_COUNTRIES = TOTAL_TRACKABLE_WORLD_COUNTRIES;
 const TOTAL_CHINA_PROVINCES = CHINA_PROVINCES.length;
 const TOTAL_CHINA_CITIES = TOTAL_TRACKABLE_CHINA_CITIES;
 

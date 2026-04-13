@@ -8,6 +8,7 @@ const DEFAULT_USER_RECORD: UserJourneyRecord = {
   userId: 'me',
   userName: '我',
   birthplace: null,
+  passengerName: '',
   journeys: [],
 };
 
@@ -66,6 +67,7 @@ function cloneRecord(record: UserJourneyRecord): UserJourneyRecord {
     userId: record.userId,
     userName: record.userName,
     birthplace: record.birthplace ? cloneLocation(record.birthplace) : null,
+    passengerName: record.passengerName?.trim() ?? '',
     journeys: record.journeys.map(cloneJourney),
   };
 }
@@ -109,6 +111,7 @@ function isUserJourneyRecord(value: unknown): value is UserJourneyRecord {
     typeof candidate.userId === 'string' &&
     typeof candidate.userName === 'string' &&
     (candidate.birthplace === undefined || candidate.birthplace === null || isJourneyLocation(candidate.birthplace)) &&
+    (candidate.passengerName === undefined || typeof candidate.passengerName === 'string') &&
     Array.isArray(candidate.journeys) &&
     candidate.journeys.every(isJourney)
   );
@@ -144,6 +147,7 @@ function normalizeRecord(record: UserJourneyRecord): UserJourneyRecord {
     birthplace: record.birthplace && isJourneyLocation(record.birthplace)
       ? cloneLocation(record.birthplace)
       : null,
+    passengerName: record.passengerName?.trim() ?? '',
     journeys: record.journeys.filter(isJourney).map(cloneJourney),
   };
 }
@@ -243,6 +247,13 @@ export function useJourneyStore() {
     }));
   };
 
+  const setPassengerName = (passengerName: string) => {
+    setRecord(current => ({
+      ...current,
+      passengerName,
+    }));
+  };
+
   const exportRecord = () => {
     const dataStr = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(record, null, 2))}`;
     const link = document.createElement('a');
@@ -258,11 +269,13 @@ export function useJourneyStore() {
     userId: record.userId,
     userName: record.userName,
     birthplace: record.birthplace ?? null,
+    passengerName: record.passengerName?.trim() ?? '',
     journeys,
     addJourney,
     updateJourney,
     deleteJourney,
     setBirthplace,
+    setPassengerName,
     exportRecord,
   };
 }

@@ -14,6 +14,12 @@ export interface JourneyLocation {
   coords?: [number, number];
 }
 
+export interface JourneyRecordFilter {
+  type: JourneyLocation['type'];
+  name: string;
+  label: string;
+}
+
 export interface Journey {
   id: string;
   title: string;
@@ -31,5 +37,6 @@ export interface UserJourneyRecord {
   userId: string;
   userName: string;
   birthplace?: JourneyLocation | null;
+  passengerName?: string;
   journeys: Journey[];
 }

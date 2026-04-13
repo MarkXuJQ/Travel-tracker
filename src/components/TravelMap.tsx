@@ -1,13 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Map, NavigationControl, Source, Layer, type MapRef } from '@vis.gl/react-maplibre';
 import * as topojson from 'topojson-client';
-import { getCountryNameForLocation, getProvinceGeoNameByCityName, resolveJourneyLocationCoords } from '../data/locationData';
-import type { Journey, JourneyLocation } from '../types/journey';
+import type { MapGeoJSONFeature, MapLayerMouseEvent } from 'maplibre-gl';
+import {
+  getCountryNameForLocation,
+  getLocationLabel,
+  getProvinceGeoNameByCityName,
+  resolveJourneyLocationCoords,
+} from '../data/locationData';
+import type { Journey, JourneyLocation, JourneyRecordFilter } from '../types/journey';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export type BaseMapMode = 'liberty' | 'bright' | 'night';
 
 type MapTone = 'light' | 'night';
+
+const DIRECT_MUNICIPALITY_PROVINCE_GEO_NAME_BY_ADCODE: Record<number, string> = {
+  110000: '北京市',
+  120000: '天津市',
+  310000: '上海市',
+  500000: '重庆市',
+};
 
 const BASE_MAPS: Record<BaseMapMode, { styleUrl: string; shellClassName: string; tone: MapTone }> = {
   liberty: {
@@ -151,10 +164,7 @@ function getHighlightedCityNames(
     } else if (level === 'district') {
       // Districts of 直辖市 — highlight if that 直辖市 is visited as a province
       const provinceAdcode = parent?.adcode ?? Math.floor(adcode / 10000) * 10000;
-      const provinceAdcodeMap: Record<number, string> = {
-        110000: '北京市', 120000: '天津市', 310000: '上海市', 500000: '重庆市',
-      };
-      const geoName = provinceAdcodeMap[provinceAdcode];
+      const geoName = DIRECT_MUNICIPALITY_PROVINCE_GEO_NAME_BY_ADCODE[provinceAdcode];
       if (geoName && visitedProvinceGeoNames.includes(geoName)) {
         highlighted.push(name);
       }
@@ -209,6 +219,7 @@ interface Props {
   baseMap?: BaseMapMode;
   selectedJourney?: Journey | null;
   panelOpen?: boolean;
+  onVisitedLocationSelect?: (filter: JourneyRecordFilter) => void;
 }
 
 interface RouteStop {
@@ -286,6 +297,81 @@ function getRouteBounds(stops: RouteStop[]) {
   };
 }
 
+function getProvinceGeoNameFromCityFeature(feature: MapGeoJSONFeature) {
+  const adcode = typeof feature.properties?.adcode === 'number' ? feature.properties.adcode : null;
+  const parentAdcode = typeof feature.properties?.parent?.adcode === 'number' ? feature.properties.parent.adcode : null;
+  const provinceAdcode = parentAdcode ?? (adcode === null ? null : Math.floor(adcode / 10000) * 10000);
+
+  if (provinceAdcode === null) return null;
+  return DIRECT_MUNICIPALITY_PROVINCE_GEO_NAME_BY_ADCODE[provinceAdcode] ?? null;
+}
+
+function resolveVisitedLocationFilterFromFeatures(
+  features: MapGeoJSONFeature[] | undefined,
+  visitedCountries: Set<string>,
+  visitedProvinces: Set<string>,
+  visitedCities: Set<string>,
+): JourneyRecordFilter | null {
+  if (!features || features.length === 0) return null;
+
+  const orderedFeatures = [...features].sort((left, right) => {
+    const rank = (feature: MapGeoJSONFeature) => {
+      if (feature.layer.id === 'city-fill') return 0;
+      if (feature.layer.id === 'china-fill') return 1;
+      if (feature.layer.id === 'world-fill') return 2;
+      return 3;
+    };
+
+    return rank(left) - rank(right);
+  });
+
+  for (const feature of orderedFeatures) {
+    const rawName = feature.properties?.name;
+    if (typeof rawName !== 'string') continue;
+
+    if (feature.layer.id === 'city-fill') {
+      const level = typeof feature.properties?.level === 'string' ? feature.properties.level : null;
+
+      if (visitedCities.has(rawName)) {
+        return {
+          type: 'city',
+          name: rawName,
+          label: getLocationLabel('city', rawName) ?? rawName,
+        };
+      }
+
+      if (level === 'district') {
+        const provinceGeoName = getProvinceGeoNameFromCityFeature(feature);
+        if (provinceGeoName && visitedProvinces.has(provinceGeoName)) {
+          return {
+            type: 'province',
+            name: provinceGeoName,
+            label: getLocationLabel('province', provinceGeoName) ?? rawName,
+          };
+        }
+      }
+    }
+
+    if (feature.layer.id === 'china-fill' && visitedProvinces.has(rawName)) {
+      return {
+        type: 'province',
+        name: rawName,
+        label: getLocationLabel('province', rawName) ?? rawName,
+      };
+    }
+
+    if (feature.layer.id === 'world-fill' && visitedCountries.has(rawName)) {
+      return {
+        type: 'country',
+        name: rawName,
+        label: getLocationLabel('country', rawName) ?? rawName,
+      };
+    }
+  }
+
+  return null;
+}
+
 export default function TravelMap({
   journeys,
   birthplace = null,
@@ -293,6 +379,7 @@ export default function TravelMap({
   baseMap = 'liberty',
   selectedJourney = null,
   panelOpen = false,
+  onVisitedLocationSelect,
 }: Props) {
   const [worldData, setWorldData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cityData, setCityData] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -306,6 +393,9 @@ export default function TravelMap({
   }, []);
 
   const { countries, provinces, cities } = useMemo(() => deriveHighlights(journeys), [journeys]);
+  const visitedCountrySet = useMemo(() => new Set(countries), [countries]);
+  const visitedProvinceSet = useMemo(() => new Set(provinces), [provinces]);
+  const visitedCitySet = useMemo(() => new Set(cities), [cities]);
   const birthplaceCountry = useMemo(
     () => (birthplace ? getCountryNameForLocation(birthplace) : null),
     [birthplace],
@@ -388,6 +478,19 @@ export default function TravelMap({
     ? { 'circle-color': '#e0f2fe', 'circle-radius': 5, 'circle-stroke-color': '#67e8f9', 'circle-stroke-width': 1.6 }
     : { 'circle-color': '#ffffff', 'circle-radius': 4.8, 'circle-stroke-color': '#475569', 'circle-stroke-width': 1.5 };
   const routeOrderPaint = isNightMode ? { 'text-color': '#082f49' } : { 'text-color': '#334155' };
+  const interactiveLayerIds = useMemo(() => {
+    const layerIds = ['world-fill'];
+
+    if (hasChinaContent && showProvinceHighlights) {
+      layerIds.push('china-fill');
+    }
+
+    if (cities.length > 0 && cityData) {
+      layerIds.push('city-fill');
+    }
+
+    return layerIds;
+  }, [cities.length, cityData, hasChinaContent, showProvinceHighlights]);
 
   return (
     <div className={`map-shell ${isNightMode ? 'map-shell--night' : 'map-shell--light'} ${mapTheme.shellClassName} w-full h-full`}>
@@ -397,6 +500,37 @@ export default function TravelMap({
         mapStyle={mapTheme.styleUrl}
         style={{ width: '100%', height: '100%' }}
         minZoom={1.5}
+        interactiveLayerIds={interactiveLayerIds}
+        onClick={(event: MapLayerMouseEvent) => {
+          const filter = resolveVisitedLocationFilterFromFeatures(
+            event.features as MapGeoJSONFeature[] | undefined,
+            visitedCountrySet,
+            visitedProvinceSet,
+            visitedCitySet,
+          );
+
+          if (filter) {
+            onVisitedLocationSelect?.(filter);
+          }
+        }}
+        onMouseMove={(event: MapLayerMouseEvent) => {
+          const map = mapRef.current?.getMap();
+          if (!map) return;
+
+          const filter = resolveVisitedLocationFilterFromFeatures(
+            event.features as MapGeoJSONFeature[] | undefined,
+            visitedCountrySet,
+            visitedProvinceSet,
+            visitedCitySet,
+          );
+
+          map.getCanvas().style.cursor = filter ? 'pointer' : '';
+        }}
+        onMouseLeave={() => {
+          const map = mapRef.current?.getMap();
+          if (!map) return;
+          map.getCanvas().style.cursor = '';
+        }}
       >
         <NavigationControl position="top-left" />
 

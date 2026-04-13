@@ -1,20 +1,26 @@
-import { useMemo } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
 import { getTravelStats } from '../utils/travelStats';
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
+import { filterJourneysByRecordFilter } from '../utils/journeyRecordFilter';
+import type { JourneyRecordFilter } from '../types/journey';
+import { getCountryNameForLocation } from '../data/locationData';
+import { getWorldCountryIso3, TOTAL_MAPPED_WORLD_COUNTRIES } from '../data/worldCountryIso3';
 import TransportModeIcon from './TransportModeIcon';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  userName: string;
+  passengerName: string;
   journeys: Journey[];
+  activeFilter: JourneyRecordFilter | null;
   deleteJourney: (id: string) => void;
   exportRecord: () => void;
   selectedJourneyId: string | null;
   editingJourneyId?: string | null;
   onSelectJourney: (id: string) => void;
   onEditJourney: (journey: Journey) => void;
+  onClearFilter: () => void;
 }
 
 const TYPE_LABEL: Record<JourneyLocation['type'], string> = {
@@ -30,6 +36,18 @@ const TYPE_DOT: Record<JourneyLocation['type'], string> = {
 };
 
 const TRAIN_TICKET_ID = '370306 20260203 XXXX';
+const WORLD_LED_MAP_SETTINGS = {
+  height: 64,
+  grid: 'diagonal' as const,
+  projection: { name: 'robinson' as const },
+  region: {
+    lat: { min: -58, max: 84 },
+    lng: { min: -180, max: 180 },
+  },
+};
+
+let dottedMapModulePromise: Promise<typeof import('dotted-map')> | null = null;
+let cachedWorldLedBaseSvg: string | null = null;
 
 function getJourneyTransportMode(journey: Journey): JourneyTransportMode {
   if (journey.transportMode) {
@@ -78,6 +96,18 @@ function formatPercent(value: number) {
   return value.toFixed(2);
 }
 
+function svgToDataUri(svg: string) {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function loadDottedMap() {
+  if (!dottedMapModulePromise) {
+    dottedMapModulePromise = import('dotted-map');
+  }
+
+  return dottedMapModulePromise;
+}
+
 function getJourneyTimestamp(journey: Journey) {
   if (!journey.date) return null;
 
@@ -124,18 +154,46 @@ function compareJourneysByOldest(left: Journey, right: Journey) {
 export default function JourneyPanel({
   isOpen,
   onClose,
+  passengerName,
   journeys,
+  activeFilter,
   deleteJourney,
   exportRecord,
   selectedJourneyId,
   editingJourneyId = null,
   onSelectJourney,
   onEditJourney,
+  onClearFilter,
 }: Props) {
   const stats = useMemo(() => getTravelStats(journeys), [journeys]);
+  const visitedCountryNames = useMemo(() => {
+    const countries = new Set<string>();
+
+    for (const journey of journeys) {
+      for (const location of journey.locations ?? []) {
+        const countryName = getCountryNameForLocation(location);
+        if (countryName && countryName !== 'Antarctica') {
+          countries.add(countryName);
+        }
+      }
+    }
+
+    return countries;
+  }, [journeys]);
+  const visitedCountryCodes = useMemo(
+    () => [...visitedCountryNames]
+      .map(countryName => getWorldCountryIso3(countryName))
+      .filter((countryCode): countryCode is string => Boolean(countryCode))
+      .sort(),
+    [visitedCountryNames],
+  );
+  const visibleJourneys = useMemo(
+    () => filterJourneysByRecordFilter(journeys, activeFilter),
+    [activeFilter, journeys],
+  );
   const sortedJourneys = useMemo(
-    () => [...journeys].sort(compareJourneysByNewest),
-    [journeys],
+    () => [...visibleJourneys].sort(compareJourneysByNewest),
+    [visibleJourneys],
   );
   const entryNumberById = useMemo(
     () => new Map(
@@ -145,7 +203,9 @@ export default function JourneyPanel({
     ),
     [journeys],
   );
-  const footprintCount = stats.countryCount + stats.provinceCount + stats.cityCount;
+  const worldFootprintCount = visitedCountryCodes.length;
+  const worldFootprintTotal = TOTAL_MAPPED_WORLD_COUNTRIES;
+  const worldFootprintProgress = worldFootprintTotal === 0 ? 0 : (worldFootprintCount / worldFootprintTotal) * 100;
 
   if (!isOpen) return null;
 
@@ -199,20 +259,16 @@ export default function JourneyPanel({
 
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-5">
-                <StatBlock
-                  label="旅程记录"
-                  value={stats.journeyCount}
-                  accentClassName="bg-stone-900"
-                />
-                <StatBlock
-                  label="足迹单位"
-                  value={footprintCount}
-                  accentClassName="bg-stone-500"
+              <div className="mt-4">
+                <WorldFootprintBoard
+                  visitedCountryCodes={visitedCountryCodes}
+                  worldFootprintCount={worldFootprintCount}
+                  worldFootprintProgress={worldFootprintProgress}
+                  worldFootprintTotal={worldFootprintTotal}
                 />
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-x-4 gap-y-5 border-t border-stone-200/80 pt-4">
+              <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-5">
                 <StatBlock
                   label="国家"
                   value={stats.countryCount}
@@ -223,11 +279,6 @@ export default function JourneyPanel({
                   value={stats.provinceCount}
                   accentClassName="bg-stone-400"
                 />
-                <StatBlock
-                  label="城市"
-                  value={stats.cityCount}
-                  accentClassName="bg-sky-500/70"
-                />
               </div>
 
               <div className="mt-5 divide-y divide-stone-200/80 border-t border-stone-200/80">
@@ -237,16 +288,7 @@ export default function JourneyPanel({
                   numerator={stats.chinaVisitedUnits}
                   denominator={stats.totalChinaUnits}
                   railClassName="bg-stone-200"
-                  fillClassName="bg-[linear-gradient(90deg,#1f2937_0%,#57534e_48%,#a8a29e_100%)]"
-                />
-
-                <ProgressMeter
-                  label="世界旅行进度"
-                  value={stats.worldProgress}
-                  numerator={stats.worldVisitedUnits}
-                  denominator={stats.totalWorldCountries}
-                  railClassName="bg-stone-200"
-                  fillClassName="bg-[linear-gradient(90deg,#0f172a_0%,#334155_52%,#94a3b8_100%)]"
+                  fillClassName="bg-stone-800"
                 />
               </div>
             </section>
@@ -259,11 +301,45 @@ export default function JourneyPanel({
                 </div>
               </div>
 
+              {activeFilter && (
+                <div className="mt-4 flex items-center justify-between gap-4 rounded-[22px] border border-stone-200/90 bg-white/68 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Location Filter</p>
+                    <p className="mt-1 truncate text-sm text-stone-800">
+                      正在查看
+                      <span className="mx-1 font-medium text-stone-900">{activeFilter.label}</span>
+                      相关的旅程
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
+                    onClick={onClearFilter}
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+
               <div className="mt-5">
                 {sortedJourneys.length === 0 ? (
-                  <div className="bg-[#fcf8f1] px-5 py-10 text-center">
-                    <p className="font-editorial text-[1.4rem] text-stone-900">旅行档案还是空白的</p>
-                  </div>
+                  activeFilter ? (
+                    <div className="bg-[#fcf8f1] px-5 py-10 text-center">
+                      <p className="font-editorial text-[1.4rem] text-stone-900">这里还没有对应的旅程记录</p>
+                      <button
+                        type="button"
+                        className="mt-5 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
+                        onClick={onClearFilter}
+                      >
+                        查看全部旅程
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-[#fcf8f1] px-5 py-10 text-center">
+                      <p className="font-editorial text-[1.4rem] text-stone-900">旅行档案还是空白的</p>
+                    </div>
+                  )
                 ) : (
                   <div className="space-y-3">
                     {sortedJourneys.map((journey, index) => (
@@ -272,6 +348,7 @@ export default function JourneyPanel({
                         journey={journey}
                         index={index}
                         entryNumber={entryNumberById.get(journey.id) ?? index + 1}
+                        passengerName={passengerName}
                         onDelete={deleteJourney}
                         onEdit={() => onEditJourney(journey)}
                         editing={journey.id === editingJourneyId}
@@ -302,6 +379,133 @@ export default function JourneyPanel({
         </div>
       </aside>
     </>
+  );
+}
+
+function WorldFootprintBoard({
+  visitedCountryCodes,
+  worldFootprintCount,
+  worldFootprintProgress,
+  worldFootprintTotal,
+}: {
+  visitedCountryCodes: string[];
+  worldFootprintCount: number;
+  worldFootprintProgress: number;
+  worldFootprintTotal: number;
+}) {
+  const [worldMapSvgSet, setWorldMapSvgSet] = useState<{ baseSvg: string; highlightedSvg: string | null } | null>(null);
+  const visitedCountryCodesKey = visitedCountryCodes.join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const buildWorldMapSvgSet = async () => {
+      const { default: DottedMap } = await loadDottedMap();
+
+      if (!cachedWorldLedBaseSvg) {
+        cachedWorldLedBaseSvg = new DottedMap(WORLD_LED_MAP_SETTINGS).getSVG({
+          shape: 'circle',
+          radius: 0.18,
+          color: '#5f666e',
+          backgroundColor: 'transparent',
+        });
+      }
+
+      const highlightedSvg = visitedCountryCodes.length > 0
+        ? new DottedMap({
+          ...WORLD_LED_MAP_SETTINGS,
+          countries: visitedCountryCodes,
+        }).getSVG({
+          shape: 'circle',
+          radius: 0.22,
+          color: '#b5e8fb',
+          backgroundColor: 'transparent',
+        })
+        : null;
+
+      const baseSvg = cachedWorldLedBaseSvg;
+      if (cancelled || !baseSvg) return;
+
+      startTransition(() => {
+        setWorldMapSvgSet({
+          baseSvg,
+          highlightedSvg,
+        });
+      });
+    };
+
+    void buildWorldMapSvgSet();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visitedCountryCodes, visitedCountryCodesKey]);
+
+  return (
+    <div className="relative overflow-hidden rounded-[28px] border border-stone-200/80 bg-[#202427] px-4 py-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_52%)]" />
+      <div className="relative flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/45">World Footprint</p>
+          <h4 className="font-editorial mt-2 text-[1.55rem] leading-none text-white">世界旅行足迹</h4>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className="font-editorial font-tabular text-[2.15rem] leading-none text-[#b5e8fb]">
+            {formatPercent(worldFootprintProgress)}
+            <span className="ml-0.5 text-base text-white/45">%</span>
+          </p>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-white/42">
+            {worldFootprintCount} / {worldFootprintTotal}
+          </p>
+        </div>
+      </div>
+
+      <div className="relative mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[#171b1e] px-3 py-3">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_0px,transparent_1px)] [background-size:18px_18px]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(181,232,251,0.08)_0%,rgba(181,232,251,0)_72%)]" />
+
+        <div className="relative h-[11.25rem] overflow-hidden">
+          {worldMapSvgSet ? (
+            <>
+              <img
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 h-full w-full object-contain opacity-70"
+                src={svgToDataUri(worldMapSvgSet.baseSvg)}
+              />
+
+              {worldMapSvgSet.highlightedSvg ? (
+                <img
+                  alt="已访问国家高亮世界地图"
+                  className="absolute inset-0 h-full w-full object-contain opacity-95 drop-shadow-[0_0_18px_rgba(181,232,251,0.28)]"
+                  src={svgToDataUri(worldMapSvgSet.highlightedSvg)}
+                />
+              ) : null}
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(181,232,251,0.05)_0%,rgba(181,232,251,0)_70%)]" />
+          )}
+        </div>
+      </div>
+
+      <div className="relative mt-4 flex items-center justify-between gap-4">
+        <p className="text-sm leading-6 text-white/74">
+          已点亮 <span className="font-tabular text-white">{worldFootprintCount}</span> 个国家与地区
+        </p>
+
+        <div className="flex items-center gap-4 text-[10px] uppercase tracking-[0.22em] text-white/42">
+          <span className="inline-flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#b5e8fb] shadow-[0_0_12px_rgba(181,232,251,0.5)]" />
+            Visited
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
+            World
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -371,6 +575,7 @@ function JourneyCard({
   journey,
   index,
   entryNumber,
+  passengerName,
   onDelete,
   onEdit,
   editing,
@@ -380,6 +585,7 @@ function JourneyCard({
   journey: Journey;
   index: number;
   entryNumber: number;
+  passengerName: string;
   onDelete: (id: string) => void;
   onEdit: () => void;
   editing: boolean;
@@ -398,6 +604,7 @@ function JourneyCard({
   const displayFrom = journey.departure?.label ?? journey.locations[0]?.label ?? '待补出发地';
   const displayTo = journey.destination?.label ?? journey.locations[journey.locations.length - 1]?.label ?? '待补目的地';
   const formattedJourneyDate = journey.date ? formatJourneyDate(journey.date) : '--.--.--';
+  const displayPassengerName = passengerName.trim() || '未设置';
   const entryLabel = `Entry ${String(entryNumber).padStart(2, '0')}`;
   const articleClassName = isFlightTicket
     ? editing
@@ -442,8 +649,8 @@ function JourneyCard({
           }
         }}
       >
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#fffdfa_0%,#f7f1e7_52%,#f3ede3_100%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.03)_0%,rgba(15,23,42,0.03)_1px,transparent_1px,transparent_3.2rem)] opacity-35" />
+        <div className="absolute inset-0 bg-[#fbf8f2]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(120,113,108,0.06)_0%,rgba(120,113,108,0.06)_1px,transparent_1px,transparent_3.2rem)] opacity-36" />
         <div className="relative px-5 py-5 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -506,9 +713,8 @@ function JourneyCard({
           </div>
 
           <div className="mt-4 rounded-[24px] border border-stone-200/90 bg-white/64 px-4 py-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
               <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Journey Order</p>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-stone-500">{journey.locations.length} Stops</p>
             </div>
 
             <div className="mt-4 space-y-3">
@@ -640,35 +846,42 @@ function JourneyCard({
                   <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    title="修改旅程"
-                    className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
-                    onClick={event => {
-                      event.stopPropagation();
-                      onEdit();
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-                    </svg>
-                  </button>
+                <>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
+                    <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
+                  </div>
 
-                  <button
-                    type="button"
-                    title="删除旅程"
-                    className={`${actionButtonClassName} hover:text-red-500`}
-                    onClick={event => {
-                      event.stopPropagation();
-                      onDelete(journey.id);
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="修改旅程"
+                      className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
+                      onClick={event => {
+                        event.stopPropagation();
+                        onEdit();
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                      </svg>
+                    </button>
+
+                    <button
+                      type="button"
+                      title="删除旅程"
+                      className={`${actionButtonClassName} hover:text-red-500`}
+                      onClick={event => {
+                        event.stopPropagation();
+                        onDelete(journey.id);
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -709,13 +922,8 @@ function JourneyCard({
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-3 border-t border-dashed border-stone-200/80 pt-3">
+            <div className="mt-4 border-t border-dashed border-stone-200/80 pt-3">
               <p className="text-[11px] uppercase tracking-[0.2em] text-stone-600">{ticketReference}</p>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-stone-500">
-                {isFlightTicket
-                  ? `${journey.locations.length} ${journey.locations.length > 1 ? 'Stops' : 'Stop'}`
-                  : `${journey.locations.length} 站`}
-              </p>
             </div>
           </div>
 
@@ -780,7 +988,9 @@ function JourneyCard({
 
             <div className="relative text-center">
               <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Passenger</p>
-              <p className="font-tabular mt-1 text-lg text-stone-900">{String(journey.locations.length).padStart(2, '0')}</p>
+              <p className="mt-1 max-w-[4.25rem] break-words text-[11px] font-medium leading-4 text-stone-900">
+                {displayPassengerName}
+              </p>
             </div>
           </div>
         ) : null}
