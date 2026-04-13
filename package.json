@@ -1,0 +1,32 @@
+{
+  "name": "travel-tracker",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vis.gl/react-maplibre": "^8.1.1",
+    "maplibre-gl": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "topojson-client": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/topojson-client": "^3.1.4",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0",
+    "vite-plugin-dts": "^4.3.0"
+  }
+}
