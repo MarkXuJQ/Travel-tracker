@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
 import { normalizeJourneyDate, parseJourneyDate } from '../utils/journeyDate';
+import TransportModeIcon from './TransportModeIcon';
 import LocationPicker from './LocationPicker';
 
 interface Props {
@@ -99,41 +100,6 @@ const formFromJourney = (journey: Journey): JourneyDraft => {
   };
 };
 
-function TransportModeIcon({
-  mode,
-  className,
-}: {
-  mode: JourneyTransportMode;
-  className?: string;
-}) {
-  if (mode === 'default') {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 18h14M7 15.5l3.2-7a1 1 0 011.82 0L15 15.5" />
-        <circle cx="7" cy="18" r="1.1" fill="currentColor" stroke="none" />
-        <circle cx="17" cy="18" r="1.1" fill="currentColor" stroke="none" />
-      </svg>
-    );
-  }
-
-  if (mode === 'flight') {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.5 13.5l7.4-1.8 4.2-7a1.1 1.1 0 011.96.14l.88 5 4.56 1.14a1.1 1.1 0 01.08 2.12l-4.64 1.42-.88 5a1.1 1.1 0 01-1.96.14l-4.18-7.06-7.42-1.64a1.1 1.1 0 010-2.16z" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 15h16M6.5 18h11M7 6.5h10l1.8 4.5H5.2L7 6.5z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7.5 11V8.8m9 2.2V8.8" />
-      <circle cx="8" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 function JourneyFormatSlider({
   value,
   onChange,
@@ -214,13 +180,33 @@ function TicketPreviewEditor({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_56%_60%,rgba(15,23,42,0.05)_0%,rgba(15,23,42,0.05)_18%,rgba(15,23,42,0)_19%),radial-gradient(circle_at_44%_66%,rgba(15,23,42,0.035)_0%,rgba(15,23,42,0.035)_14%,rgba(15,23,42,0)_15%)]" />
 
         <div className="relative grid grid-cols-[minmax(0,1fr)_6rem]">
-          <div className="px-5 py-5">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-900">Airlines Ticket</p>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-700/80">Boarding Pass</p>
+          <div className="relative px-5 pb-5 pt-[4.35rem]">
+            <div className="absolute inset-x-0 top-0 z-[1] flex h-12 items-center justify-between px-5">
+              <div className="flex min-w-0 items-center gap-3 text-stone-950">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/24 text-stone-950">
+                  <TransportModeIcon mode={mode} tone="light" className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-950/92">Boarding Pass</p>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-stone-900/68">Entry 01</p>
+                </div>
+              </div>
+
+              <p className="font-tabular text-[11px] tracking-[0.14em] text-stone-950/92">AA223</p>
             </div>
 
-            <div className="mt-7 flex items-end justify-between gap-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h4 className="font-editorial text-[1.45rem] leading-snug text-stone-900">票面预览</h4>
+              </div>
+
+              <div className="shrink-0 text-right">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
+                <p className="font-tabular mt-2 text-sm text-stone-800">2026.02.03</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-end justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-stone-400">From</p>
                 <p className="mt-2 truncate text-lg font-semibold leading-none text-stone-900">
@@ -267,19 +253,20 @@ function TicketPreviewEditor({
             </div>
           </div>
 
-          <div className="relative flex flex-col items-center justify-between px-3 py-4">
-            <div className="pt-1 text-center">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Gate</p>
-              <p className="mt-1 text-xs font-medium text-stone-800">04</p>
+          <div className="relative flex flex-col items-center justify-between px-3 pb-4 pt-[4.35rem]">
+            <div className="absolute inset-x-0 top-0 z-[1] flex h-12 flex-col items-center justify-center text-stone-950">
+              <p className="text-[9px] uppercase tracking-[0.24em] text-stone-950/72">Gate</p>
+              <p className="font-tabular text-[11px] tracking-[0.18em] text-stone-950/92">04</p>
             </div>
 
-            <div className="rounded-full border border-stone-300 bg-white/90 p-2 text-stone-700">
-              <TransportModeIcon mode={mode} className="h-4 w-4" />
-            </div>
-
-            <div className="text-center">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Stub</p>
-              <p className="mt-1 text-xs font-medium text-stone-800">Flight</p>
+            <div className="relative flex flex-col items-center gap-2 text-center">
+              <div className="rounded-full border border-stone-300 bg-white/90 p-2 text-stone-700">
+                <TransportModeIcon mode={mode} tone="dark" className="h-4 w-4" />
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Flight</p>
+                <p className="mt-1 text-xs font-medium text-stone-800">Stub</p>
+              </div>
             </div>
           </div>
         </div>

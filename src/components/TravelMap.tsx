@@ -244,43 +244,6 @@ function resolveRouteStops(journey: Journey | null | undefined): RouteStop[] {
   });
 }
 
-function createArcCoordinates(from: [number, number], to: [number, number], steps = 36): [number, number][] {
-  const startLat = from[0];
-  const startLng = from[1];
-  const endLat = to[0];
-  let endLng = to[1];
-
-  if (endLng - startLng > 180) endLng -= 360;
-  if (endLng - startLng < -180) endLng += 360;
-
-  const dx = endLng - startLng;
-  const dy = endLat - startLat;
-  const distance = Math.hypot(dx, dy);
-
-  if (distance === 0) {
-    return [[startLng, startLat], [endLng, endLat]];
-  }
-
-  const midpointLng = (startLng + endLng) / 2;
-  const midpointLat = (startLat + endLat) / 2;
-  const normalLng = -dy / distance;
-  const normalLat = dx / distance;
-  const offset = Math.min(Math.max(distance * 0.16, 0.8), 9);
-
-  const controlA: [number, number] = [midpointLng + normalLng * offset, midpointLat + normalLat * offset];
-  const controlB: [number, number] = [midpointLng - normalLng * offset, midpointLat - normalLat * offset];
-  const control = controlA[1] >= controlB[1] ? controlA : controlB;
-
-  return Array.from({ length: steps + 1 }, (_, index) => {
-    const t = index / steps;
-    const inv = 1 - t;
-    const lng = inv * inv * startLng + 2 * inv * t * control[0] + t * t * endLng;
-    const lat = inv * inv * startLat + 2 * inv * t * control[1] + t * t * endLat;
-
-    return [lng, lat];
-  });
-}
-
 function buildSelectedJourneyGeoJSON(stops: RouteStop[]): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
 
@@ -295,21 +258,6 @@ function buildSelectedJourneyGeoJSON(stops: RouteStop[]): GeoJSON.FeatureCollect
       geometry: {
         type: 'Point',
         coordinates: [stop.coords[1], stop.coords[0]],
-      },
-    });
-
-    const nextStop = stops[index + 1];
-    if (!nextStop) return;
-
-    features.push({
-      type: 'Feature',
-      properties: {
-        kind: 'segment',
-        order: index + 1,
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: createArcCoordinates(stop.coords, nextStop.coords),
       },
     });
   });
@@ -433,12 +381,6 @@ export default function TravelMap({
     );
   }, [panelOpen, selectedRouteStops]);
 
-  const routeLineHaloPaint = isNightMode
-    ? { 'line-color': '#22d3ee', 'line-opacity': 0.2, 'line-width': 6, 'line-blur': 2.1 }
-    : { 'line-color': '#cbd5e1', 'line-opacity': 0.52, 'line-width': 4.5, 'line-blur': 1.2 };
-  const routeLinePaint = isNightMode
-    ? { 'line-color': '#93c5fd', 'line-opacity': 0.84, 'line-width': 2.15 }
-    : { 'line-color': '#475569', 'line-opacity': 0.78, 'line-width': 1.95 };
   const routeStopHaloPaint = isNightMode
     ? { 'circle-color': '#67e8f9', 'circle-opacity': 0.24, 'circle-radius': 9.5 }
     : { 'circle-color': '#94a3b8', 'circle-opacity': 0.16, 'circle-radius': 7.5 };
@@ -531,22 +473,6 @@ export default function TravelMap({
 
         {selectedRouteData && (
           <Source id="selected-journey-route" type="geojson" data={selectedRouteData}>
-            <Layer
-              id="selected-journey-route-halo"
-              type="line"
-              filter={['==', ['get', 'kind'], 'segment']}
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              paint={routeLineHaloPaint as any}
-            />
-            <Layer
-              id="selected-journey-route-line"
-              type="line"
-              filter={['==', ['get', 'kind'], 'segment']}
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              paint={routeLinePaint as any}
-            />
             <Layer
               id="selected-journey-route-stop-halo"
               type="circle"

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
 import { getTravelStats } from '../utils/travelStats';
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
+import TransportModeIcon from './TransportModeIcon';
 
 interface Props {
   isOpen: boolean;
@@ -71,31 +72,6 @@ function getFlightStubLabel(index: number) {
   };
 }
 
-function TransportModeIcon({
-  mode,
-  className,
-}: {
-  mode: JourneyTransportMode;
-  className?: string;
-}) {
-  if (mode === 'flight') {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.5 13.5l7.4-1.8 4.2-7a1.1 1.1 0 011.96.14l.88 5 4.56 1.14a1.1 1.1 0 01.08 2.12l-4.64 1.42-.88 5a1.1 1.1 0 01-1.96.14l-4.18-7.06-7.42-1.64a1.1 1.1 0 010-2.16z" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 15h16M6.5 18h11M7 6.5h10l1.8 4.5H5.2L7 6.5z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7.5 11V8.8m9 2.2V8.8" />
-      <circle cx="8" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 function formatPercent(value: number) {
   if (value >= 10) return value.toFixed(0);
   if (value >= 1) return value.toFixed(1);
@@ -103,7 +79,46 @@ function formatPercent(value: number) {
 }
 
 function getJourneyTimestamp(journey: Journey) {
-  return getJourneyDateTimestamp(journey.date);
+  if (!journey.date) return null;
+
+  const timestamp = getJourneyDateTimestamp(journey.date);
+  return timestamp === 0 ? null : timestamp;
+}
+
+function compareJourneysByNewest(left: Journey, right: Journey) {
+  const leftTimestamp = getJourneyTimestamp(left);
+  const rightTimestamp = getJourneyTimestamp(right);
+
+  if (leftTimestamp === null && rightTimestamp === null) {
+    return left.id.localeCompare(right.id);
+  }
+
+  if (leftTimestamp === null) return 1;
+  if (rightTimestamp === null) return -1;
+
+  if (rightTimestamp !== leftTimestamp) {
+    return rightTimestamp - leftTimestamp;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function compareJourneysByOldest(left: Journey, right: Journey) {
+  const leftTimestamp = getJourneyTimestamp(left);
+  const rightTimestamp = getJourneyTimestamp(right);
+
+  if (leftTimestamp === null && rightTimestamp === null) {
+    return left.id.localeCompare(right.id);
+  }
+
+  if (leftTimestamp === null) return 1;
+  if (rightTimestamp === null) return -1;
+
+  if (leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp;
+  }
+
+  return left.id.localeCompare(right.id);
 }
 
 export default function JourneyPanel({
@@ -119,7 +134,15 @@ export default function JourneyPanel({
 }: Props) {
   const stats = useMemo(() => getTravelStats(journeys), [journeys]);
   const sortedJourneys = useMemo(
-    () => [...journeys].sort((left, right) => getJourneyTimestamp(right) - getJourneyTimestamp(left)),
+    () => [...journeys].sort(compareJourneysByNewest),
+    [journeys],
+  );
+  const entryNumberById = useMemo(
+    () => new Map(
+      [...journeys]
+        .sort(compareJourneysByOldest)
+        .map((journey, index) => [journey.id, index + 1]),
+    ),
     [journeys],
   );
   const footprintCount = stats.countryCount + stats.provinceCount + stats.cityCount;
@@ -248,6 +271,7 @@ export default function JourneyPanel({
                         key={journey.id}
                         journey={journey}
                         index={index}
+                        entryNumber={entryNumberById.get(journey.id) ?? index + 1}
                         onDelete={deleteJourney}
                         onEdit={() => onEditJourney(journey)}
                         editing={journey.id === editingJourneyId}
@@ -346,6 +370,7 @@ function ProgressMeter({
 function JourneyCard({
   journey,
   index,
+  entryNumber,
   onDelete,
   onEdit,
   editing,
@@ -354,6 +379,7 @@ function JourneyCard({
 }: {
   journey: Journey;
   index: number;
+  entryNumber: number;
   onDelete: (id: string) => void;
   onEdit: () => void;
   editing: boolean;
@@ -366,13 +392,13 @@ function JourneyCard({
   const isMultiStopJourney = journey.locations.length > 2;
   const usesLedgerLayout = isMultiStopJourney || isDefaultLayout;
   const ticketLabel = isFlightTicket ? 'Boarding Pass' : 'Rail Ticket';
-  const ticketNote = isFlightTicket ? '登机牌档案' : '车票档案';
   const ticketReference = getTicketReference(journey, index, transportMode);
   const ticketSerial = getTicketSerial(journey, index, transportMode);
   const flightStubLabel = isFlightTicket ? getFlightStubLabel(index) : null;
   const displayFrom = journey.departure?.label ?? journey.locations[0]?.label ?? '待补出发地';
   const displayTo = journey.destination?.label ?? journey.locations[journey.locations.length - 1]?.label ?? '待补目的地';
   const formattedJourneyDate = journey.date ? formatJourneyDate(journey.date) : '--.--.--';
+  const entryLabel = `Entry ${String(entryNumber).padStart(2, '0')}`;
   const articleClassName = isFlightTicket
     ? editing
       ? 'border-[#dcbf82] shadow-[0_28px_56px_-40px_rgba(217,119,6,0.3)]'
@@ -390,8 +416,8 @@ function JourneyCard({
   const stubClassName = isFlightTicket
     ? 'border-[#ead9b8] bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(249,245,239,0.98)_100%)]'
     : 'border-[#8fd4ec] bg-[#dff2f9]';
-  const contentPaddingClassName = isFlightTicket ? 'px-5 py-5 sm:px-6' : 'px-5 pb-10 pt-5 sm:px-6';
-  const stubPaddingClassName = isFlightTicket ? 'px-3 py-4' : 'px-3 pb-10 pt-4';
+  const contentPaddingClassName = isFlightTicket ? 'px-5 pb-5 pt-[4.35rem] sm:px-6' : 'px-5 pb-10 pt-5 sm:px-6';
+  const stubPaddingClassName = isFlightTicket ? 'px-3 pb-4 pt-[4.35rem]' : 'px-3 pb-10 pt-4';
   const ticketGridClassName = isFlightTicket ? 'grid grid-cols-[minmax(0,1fr)_5.75rem]' : 'grid grid-cols-1';
   const actionButtonClassName = 'flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-stone-400 transition hover:border-white/80 hover:bg-white/82';
 
@@ -422,9 +448,7 @@ function JourneyCard({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.32em] text-stone-500">Journey Ledger</p>
-              <p className="mt-2 text-[10px] uppercase tracking-[0.24em] text-stone-400">
-                Entry {String(index + 1).padStart(2, '0')} · 默认旅程档案
-              </p>
+              <p className="mt-2 text-[10px] uppercase tracking-[0.24em] text-stone-400">{entryLabel}</p>
 
               <h4 className="font-editorial mt-4 text-[1.45rem] leading-snug text-stone-900">
                 {journey.url ? (
@@ -481,38 +505,7 @@ function JourneyCard({
             </div>
           </div>
 
-          {isMultiStopJourney && (
-            <div className="mt-5 rounded-[24px] border border-stone-200/90 bg-white/64 px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Start</p>
-                  <p className="font-editorial mt-2 truncate text-[1.55rem] leading-none text-stone-900">
-                    {displayFrom}
-                  </p>
-                </div>
-
-                <div className="flex min-w-[4rem] flex-col items-center gap-2 px-2">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-stone-900 text-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 12h16m0 0l-4-4m4 4l-4 4" />
-                    </svg>
-                  </span>
-                  <span className="text-[10px] uppercase tracking-[0.22em] text-stone-400">
-                    {journey.locations.length} Stops
-                  </span>
-                </div>
-
-                <div className="min-w-0 text-right">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">End</p>
-                  <p className="font-editorial mt-2 truncate text-[1.55rem] leading-none text-stone-900">
-                    {displayTo}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className={`${isMultiStopJourney ? 'mt-5' : 'mt-4'} rounded-[24px] border border-stone-200/90 bg-white/64 px-4 py-4`}>
+          <div className="mt-4 rounded-[24px] border border-stone-200/90 bg-white/64 px-4 py-4">
             <div className="flex items-center justify-between gap-4">
               <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Journey Order</p>
               <p className="text-[11px] uppercase tracking-[0.2em] text-stone-500">{journey.locations.length} Stops</p>
@@ -586,34 +579,44 @@ function JourneyCard({
 
       <div className={ticketGridClassName}>
         <div className={`relative ${contentPaddingClassName}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className={`text-[10px] font-semibold tracking-[0.08em] ${
-                isFlightTicket ? 'text-stone-900' : 'text-[#d33f49]'
-              }`}>
-                {ticketSerial}
-              </p>
-              <div className="mt-2 flex items-center gap-3">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-full border ${
-                  isFlightTicket
-                    ? 'border-stone-300 bg-white/90 text-stone-700'
-                    : 'border-sky-200/90 bg-white/84 text-sky-900'
-                }`}>
-                  <TransportModeIcon mode={transportMode} className="h-4 w-4" />
+          {isFlightTicket ? (
+            <div className="absolute inset-x-0 top-0 z-[1] flex h-12 items-center justify-between px-5 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3 text-stone-950">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/24 text-stone-950">
+                  <TransportModeIcon mode={transportMode} tone="light" className="h-3.5 w-3.5" />
                 </span>
-                <div>
-                  <p className={`text-[10px] uppercase tracking-[0.3em] ${
-                    isFlightTicket ? 'text-stone-900' : 'text-sky-950/72'
-                  }`}>
-                    {ticketLabel}
-                  </p>
-                  <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">
-                    Entry {String(index + 1).padStart(2, '0')} · {ticketNote}
-                  </p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-950/92">Boarding Pass</p>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-stone-900/68">{entryLabel}</p>
                 </div>
               </div>
 
-              <h4 className="font-editorial mt-4 text-[1.45rem] leading-snug text-stone-900">
+              <p className="font-tabular text-[11px] tracking-[0.14em] text-stone-950/92">{ticketSerial}</p>
+            </div>
+          ) : null}
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              {!isFlightTicket ? (
+                <>
+                  <p className="text-[10px] font-semibold tracking-[0.08em] text-[#d33f49]">
+                    {ticketSerial}
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-200/90 bg-white/84 text-sky-900">
+                      <TransportModeIcon mode={transportMode} tone="light" className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-sky-950/72">
+                        {ticketLabel}
+                      </p>
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">{entryLabel}</p>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              <h4 className={`font-editorial text-[1.45rem] leading-snug text-stone-900 ${isFlightTicket ? '' : 'mt-4'}`}>
                 {journey.url ? (
                   <a
                     href={journey.url}
@@ -631,18 +634,11 @@ function JourneyCard({
             </div>
 
             <div className={`shrink-0 ${isFlightTicket ? 'text-right' : 'flex flex-col items-end gap-3 text-right'}`}>
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.26em] text-stone-500">
-                  {isFlightTicket ? 'Boarding Pass' : '日期'}
-                </p>
-                <p className="font-tabular mt-2 text-sm text-stone-800">
-                  {isFlightTicket ? flightStubLabel?.value : formattedJourneyDate}
-                </p>
-              </div>
               {isFlightTicket ? (
-                <p className="mt-2 text-[10px] uppercase tracking-[0.24em] text-stone-500">
-                  {formattedJourneyDate}
-                </p>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
+                  <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <button
@@ -694,7 +690,7 @@ function JourneyCard({
                 <span className={`flex h-10 w-10 items-center justify-center rounded-full ${
                   isFlightTicket ? 'bg-stone-900 text-white' : 'bg-white/84 text-sky-950'
                 }`}>
-                  <TransportModeIcon mode={transportMode} className="h-4 w-4" />
+                  <TransportModeIcon mode={transportMode} tone="dark" className="h-4 w-4" />
                 </span>
                 <span className={`block w-10 border-t border-dashed ${
                   isFlightTicket ? 'border-stone-400' : 'border-sky-600/35'
@@ -733,16 +729,18 @@ function JourneyCard({
         {isFlightTicket ? (
           <div className={`relative flex flex-col items-center justify-between border-l border-dashed ${stubPaddingClassName} ${stubClassName}`}>
             <div className="absolute inset-x-0 top-0 h-12 bg-[linear-gradient(90deg,#f3b448_0%,#eba630_100%)]" />
+            <div className="absolute inset-x-0 top-0 z-[1] flex h-12 flex-col items-center justify-center text-stone-950">
+              <p className="text-[9px] uppercase tracking-[0.24em] text-stone-950/72">{flightStubLabel?.title}</p>
+              <p className="font-tabular text-[11px] tracking-[0.18em] text-stone-950/92">{flightStubLabel?.value}</p>
+            </div>
 
             <div className="relative flex flex-col items-center gap-2 text-center">
               <span className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white/94 text-stone-700">
-                <TransportModeIcon mode={transportMode} className="h-4 w-4" />
+                <TransportModeIcon mode={transportMode} tone="dark" className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">
-                  {flightStubLabel?.title}
-                </p>
-                <p className="mt-1 text-xs font-medium text-stone-800">{flightStubLabel?.value}</p>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Flight</p>
+                <p className="mt-1 text-xs font-medium text-stone-800">Stub</p>
               </div>
             </div>
 
