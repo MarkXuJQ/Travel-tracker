@@ -1,14 +1,17 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Map, NavigationControl, useMap } from '@vis.gl/react-maplibre';
 import { Source, Layer } from '@vis.gl/react-maplibre';
 import { travelConfig } from '../data/travelConfig';
 import { CHINA_PROVINCES } from '../data/chinaData';
 import type { Journey } from '../data/travelConfig';
+import type { Granularity } from './GranularityControl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const visitedCountries = travelConfig.visitedCountries.filter(c => c !== 'China');
+// ---- Visited sets ----
 
-// GeoJSON province names include suffixes like 省/市/自治区; match by containment
+const visitedCountriesNoChina = travelConfig.visitedCountries.filter(c => c !== 'China');
+
+// Province name matching (GeoJSON uses full names like "北京市", "四川省")
 const GEOJSON_PROVINCE_NAMES = [
   '北京市','天津市','河北省','山西省','内蒙古自治区','辽宁省','吉林省','黑龙江省',
   '上海市','江苏省','浙江省','安徽省','福建省','江西省','山东省','河南省',
@@ -21,33 +24,106 @@ const visitedProvinceGeoNames = GEOJSON_PROVINCE_NAMES.filter(fullName =>
   travelConfig.visitedChinaProvinces.some(p => fullName.includes(p))
 );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const worldFillPaint: any = {
-  'fill-color': ['match', ['get', 'name'], visitedCountries, '#4ade80', '#e5e7eb'],
-  'fill-opacity': ['match', ['get', 'name'], visitedCountries, 0.6, 0.3],
-};
+// 直辖市 province adcodes — their DataV features are districts, not cities
+const ZHIXIASHI_ADCODES = [110000, 120000, 310000, 500000];
+// Visited 直辖市 province short names (e.g. "北京")
+const visitedZhixiashiProvinces = travelConfig.visitedChinaProvinces.filter(p =>
+  ['北京', '天津', '上海', '重庆'].includes(p)
+);
+
+// ---- Paint helpers ----
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const chinaFillPaint: any = visitedProvinceGeoNames.length > 0
+function worldPaint(highlightChina: boolean): any {
+  const countries = highlightChina
+    ? travelConfig.visitedCountries
+    : visitedCountriesNoChina;
+  return {
+    'fill-color': ['match', ['get', 'name'], countries, '#4ade80', '#e5e7eb'],
+    'fill-opacity': ['match', ['get', 'name'], countries, 0.6, 0.3],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const provincePaint: any = visitedProvinceGeoNames.length > 0
   ? {
       'fill-color': ['match', ['get', 'name'], visitedProvinceGeoNames, '#facc15', 'transparent'],
       'fill-opacity': ['match', ['get', 'name'], visitedProvinceGeoNames, 0.5, 0],
     }
   : { 'fill-color': 'transparent', 'fill-opacity': 0 };
 
-// Visited city coordinates from CHINA_PROVINCES data
-const visitedCityPoints = CHINA_PROVINCES.flatMap(province =>
-  province.cities
-    .filter(city => travelConfig.visitedChinaCities.includes(city.name))
-    .map(city => ({ name: city.name, lat: city.lat, lng: city.lng }))
-);
+// City paint — highlights:
+//  • regular prefecture-level cities that match visitedChinaCities (exact name match)
+//  • all districts of visited 直辖市
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildCityPaint(features: GeoJSON.Feature[]): any {
+  const highlightedNames: string[] = [];
+
+  for (const f of features) {
+    const { name, level, adcode, parent } = f.properties as {
+      name: string; level: string; adcode: number; parent?: { adcode: number };
+    };
+
+    if (level === 'city') {
+      // Regular prefecture: check if name matches visitedChinaCities
+      if (travelConfig.visitedChinaCities.some(v => name === v || name.includes(v) || v.includes(name.replace('市', '')))) {
+        highlightedNames.push(name);
+      }
+    } else if (level === 'district') {
+      // District belongs to a 直辖市 — highlight if that province is visited
+      const provinceAdcode = parent?.adcode ?? Math.floor(adcode / 10000) * 10000;
+      if (ZHIXIASHI_ADCODES.includes(provinceAdcode)) {
+        const provinceMap: Record<number, string> = {
+          110000: '北京', 120000: '天津', 310000: '上海', 500000: '重庆',
+        };
+        const shortName = provinceMap[provinceAdcode];
+        if (shortName && visitedZhixiashiProvinces.includes(shortName)) {
+          highlightedNames.push(name);
+        }
+      }
+    }
+  }
+
+  if (highlightedNames.length === 0) {
+    return { 'fill-color': 'transparent', 'fill-opacity': 0 };
+  }
+  return {
+    'fill-color': ['match', ['get', 'name'], highlightedNames, '#fb923c', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], highlightedNames, 0.55, 0],
+  };
+}
+
+// ---- Component ----
 
 interface Props {
   journeys: Journey[];
   onMarkerClick: (journey: Journey) => void;
+  granularity: Granularity;
 }
 
-export default function TravelMap({ journeys, onMarkerClick }: Props) {
+export default function TravelMap({ journeys, onMarkerClick, granularity }: Props) {
+  const [cityData, setCityData] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [cityPaint, setCityPaint] = useState<object | null>(null);
+  const loadingRef = useRef(false);
+
+  // Lazy-load city GeoJSON only when switching to city granularity
+  useEffect(() => {
+    if (granularity !== 'city' || cityData || loadingRef.current) return;
+    loadingRef.current = true;
+    fetch('/china-cities.json')
+      .then(r => r.json())
+      .then((data: GeoJSON.FeatureCollection) => {
+        setCityData(data);
+        setCityPaint(buildCityPaint(data.features as GeoJSON.Feature[]));
+      })
+      .catch(console.error)
+      .finally(() => { loadingRef.current = false; });
+  }, [granularity, cityData]);
+
+  const showCountryChina = granularity === 'country';
+  const showProvinces = granularity === 'province';
+  const showCities = granularity === 'city';
+
   return (
     <div className="w-full h-full">
       <Map
@@ -58,62 +134,56 @@ export default function TravelMap({ journeys, onMarkerClick }: Props) {
       >
         <NavigationControl position="top-left" />
 
-        {/* World countries layer — China excluded via filter */}
+        {/* World countries — China filtered out unless granularity=country */}
         <Source id="world" type="geojson" data="/world-atlas.json">
           <Layer
             id="world-fill"
             type="fill"
-            paint={worldFillPaint}
-            filter={['!=', ['get', 'name'], 'China']}
+            paint={worldPaint(showCountryChina)}
+            filter={showCountryChina ? undefined : ['!=', ['get', 'name'], 'China']}
           />
           <Layer
             id="world-border"
             type="line"
             paint={{ 'line-color': '#ffffff', 'line-width': 0.5 }}
-            filter={['!=', ['get', 'name'], 'China']}
+            filter={showCountryChina ? undefined : ['!=', ['get', 'name'], 'China']}
           />
         </Source>
 
-        {/* China provinces layer */}
-        <Source id="china" type="geojson" data="/china-provinces.json">
-          <Layer
-            id="china-fill"
-            type="fill"
-            paint={chinaFillPaint}
-          />
-          <Layer
-            id="china-border"
-            type="line"
-            paint={{ 'line-color': '#9ca3af', 'line-width': 0.5 }}
-          />
-        </Source>
+        {/* China provinces — visible in province mode */}
+        {(showProvinces || showCities) && (
+          <Source id="china" type="geojson" data="/china-provinces.json">
+            <Layer
+              id="china-fill"
+              type="fill"
+              paint={showProvinces ? provincePaint : { 'fill-color': 'transparent', 'fill-opacity': 0 }}
+            />
+            <Layer
+              id="china-border"
+              type="line"
+              paint={{ 'line-color': '#9ca3af', 'line-width': 0.5 }}
+            />
+          </Source>
+        )}
 
-        {/* Visited city dots */}
-        <Source
-          id="cities"
-          type="geojson"
-          data={{
-            type: 'FeatureCollection',
-            features: visitedCityPoints.map(city => ({
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: [city.lng, city.lat] },
-              properties: { name: city.name },
-            })),
-          }}
-        >
-          <Layer
-            id="city-dots"
-            type="circle"
-            paint={{
-              'circle-radius': 5,
-              'circle-color': '#ef4444',
-              'circle-stroke-color': '#ffffff',
-              'circle-stroke-width': 1,
-            }}
-          />
-        </Source>
+        {/* City boundaries — visible in city mode, lazy-loaded */}
+        {showCities && cityData && cityPaint && (
+          <Source id="cities" type="geojson" data={cityData}>
+            <Layer
+              id="city-fill"
+              type="fill"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={cityPaint as any}
+            />
+            <Layer
+              id="city-border"
+              type="line"
+              paint={{ 'line-color': '#d1d5db', 'line-width': 0.4 }}
+            />
+          </Source>
+        )}
 
-        {/* Journey markers rendered as DOM overlays */}
+        {/* Journey markers */}
         <JourneyMarkers journeys={journeys} onMarkerClick={onMarkerClick} />
       </Map>
     </div>
@@ -121,7 +191,7 @@ export default function TravelMap({ journeys, onMarkerClick }: Props) {
 }
 
 // Inner component so it can use useMap hook
-function JourneyMarkers({ journeys, onMarkerClick }: Props) {
+function JourneyMarkers({ journeys, onMarkerClick }: Pick<Props, 'journeys' | 'onMarkerClick'>) {
   return (
     <>
       {journeys.map(journey => {
@@ -150,7 +220,6 @@ function JourneyMarkers({ journeys, onMarkerClick }: Props) {
   );
 }
 
-// Individual marker using maplibre Marker via imperative API
 import maplibregl from 'maplibre-gl';
 
 interface MarkerProps {
@@ -170,7 +239,6 @@ function JourneyMarker({ lat, lng, journey, onClick }: MarkerProps) {
     if (!map) return;
 
     const el = document.createElement('div');
-    el.className = 'journey-marker-pin';
     el.innerHTML = `
       <div style="animation: bounce 1s infinite; cursor: pointer;">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 20 20" fill="#ef4444" style="filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4))">

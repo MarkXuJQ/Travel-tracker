@@ -19,7 +19,10 @@ export const travelConfig: TravelConfig = {
 
   visitedChinaProvinces: ['北京', '上海', '四川', '广东', '浙江'],
 
-  visitedChinaCities: ['北京市', '上海市', '成都', '广州', '深圳', '杭州', '宁波'],
+  // Regular prefecture-level cities use "XXX市" format (matching DataV GeoJSON).
+  // 直辖市 (Beijing/Shanghai/Tianjin/Chongqing) are highlighted via visitedChinaProvinces
+  // in city mode — all their districts are lit when the province is visited.
+  visitedChinaCities: ['成都市', '广州市', '深圳市', '杭州市', '宁波市'],
 
   journeys: [
     {

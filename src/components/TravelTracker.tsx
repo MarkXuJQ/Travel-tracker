@@ -2,16 +2,23 @@ import { useState } from 'react';
 import { useJourneyStore } from '../hooks/useJourneyStore';
 import TravelMap from './TravelMap';
 import JourneyPanel from './JourneyPanel';
+import GranularityControl, { type Granularity } from './GranularityControl';
 import type { Journey } from '../data/travelConfig';
 
 export default function TravelTracker() {
   const { journeys, addJourney, deleteJourney, exportJourneys } = useJourneyStore();
   const [panelOpen, setPanelOpen] = useState(false);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
+  const [granularity, setGranularity] = useState<Granularity>('province');
 
   return (
     <div className="w-full h-full relative">
-      <TravelMap journeys={journeys} onMarkerClick={setSelectedJourney} />
+      <TravelMap journeys={journeys} onMarkerClick={setSelectedJourney} granularity={granularity} />
+
+      {/* Granularity selector — top center */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
+        <GranularityControl value={granularity} onChange={setGranularity} />
+      </div>
 
       {/* Toggle panel button */}
       <button
@@ -37,8 +44,8 @@ export default function TravelTracker() {
           </button>
           <h3 className="font-bold text-blue-700 text-base pr-5">{selectedJourney.title}</h3>
           <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-            <span>📅 {selectedJourney.date}</span>
-            <span>📍 {selectedJourney.location}</span>
+            <span>{selectedJourney.date}</span>
+            <span>{selectedJourney.location}</span>
           </div>
           <p className="text-sm text-gray-600 mt-2 border-t pt-2">{selectedJourney.description}</p>
         </div>
