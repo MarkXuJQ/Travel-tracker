@@ -1,63 +1,88 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { Map, NavigationControl, useMap } from '@vis.gl/react-maplibre';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { Map, NavigationControl } from '@vis.gl/react-maplibre';
 import { Source, Layer } from '@vis.gl/react-maplibre';
-import { travelConfig } from '../data/travelConfig';
-import { CHINA_PROVINCES } from '../data/chinaData';
+import * as topojson from 'topojson-client';
 import type { Journey } from '../data/travelConfig';
-import type { Granularity } from './GranularityControl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-// ---- Visited sets ----
+// ---- Convert TopoJSON world-atlas to GeoJSON with antimeridian fix ----
 
-const visitedCountriesNoChina = travelConfig.visitedCountries.filter(c => c !== 'China');
+function wrapCoordinates(geometry: GeoJSON.Geometry) {
+  const wrapRing = (ring: number[][]) => {
+    for (let i = 1; i < ring.length; i++) {
+      const prevLng = ring[i - 1][0];
+      const currLng = ring[i][0];
+      if (Math.abs(currLng - prevLng) > 180) {
+        ring[i][0] += currLng > prevLng ? -360 : 360;
+      }
+    }
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = geometry as any;
+  if (g.type === 'Polygon') g.coordinates.forEach(wrapRing);
+  else if (g.type === 'MultiPolygon') g.coordinates.forEach((p: number[][][]) => p.forEach(wrapRing));
+}
 
-// Province name matching (GeoJSON uses full names like "北京市", "四川省")
-const GEOJSON_PROVINCE_NAMES = [
-  '北京市','天津市','河北省','山西省','内蒙古自治区','辽宁省','吉林省','黑龙江省',
-  '上海市','江苏省','浙江省','安徽省','福建省','江西省','山东省','河南省',
-  '湖北省','湖南省','广东省','广西壮族自治区','海南省','重庆市','四川省',
-  '贵州省','云南省','西藏自治区','陕西省','甘肃省','青海省','宁夏回族自治区',
-  '新疆维吾尔自治区','台湾省','香港特别行政区','澳门特别行政区',
-];
+async function loadWorldGeoJSON(): Promise<GeoJSON.FeatureCollection> {
+  const res = await fetch('/world-atlas.json');
+  const topo = await res.json();
+  const objectName = Object.keys(topo.objects)[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const geojson = topojson.feature(topo, topo.objects[objectName]) as any as GeoJSON.FeatureCollection;
+  geojson.features.forEach(f => { if (f.geometry) wrapCoordinates(f.geometry); });
+  return geojson;
+}
 
-const visitedProvinceGeoNames = GEOJSON_PROVINCE_NAMES.filter(fullName =>
-  travelConfig.visitedChinaProvinces.some(p => fullName.includes(p))
-);
+// ---- Derived highlight sets from journeys ----
+// Highlight level is determined purely by location type:
+//   type='country'  → highlight on world layer
+//   type='province' → highlight on china-provinces layer
+//   type='city'     → highlight on city-boundaries layer
 
-// 直辖市 province adcodes — their DataV features are districts, not cities
-const ZHIXIASHI_ADCODES = [110000, 120000, 310000, 500000];
-// Visited 直辖市 province short names (e.g. "北京")
-const visitedZhixiashiProvinces = travelConfig.visitedChinaProvinces.filter(p =>
-  ['北京', '天津', '上海', '重庆'].includes(p)
-);
+function deriveHighlights(journeys: Journey[]) {
+  const countries: string[] = [];
+  const provinces: string[] = [];
+  const cities: string[] = [];
 
-// ---- Paint helpers ----
+  for (const journey of journeys) {
+    for (const loc of (journey.locations ?? [])) {
+      if (loc.type === 'country' && !countries.includes(loc.name)) {
+        countries.push(loc.name);
+      } else if (loc.type === 'province' && !provinces.includes(loc.name)) {
+        provinces.push(loc.name);
+      } else if (loc.type === 'city' && !cities.includes(loc.name)) {
+        cities.push(loc.name);
+      }
+    }
+  }
+
+  return { countries, provinces, cities };
+}
+
+// ---- Paint builders ----
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function worldPaint(highlightChina: boolean): any {
-  const countries = highlightChina
-    ? travelConfig.visitedCountries
-    : visitedCountriesNoChina;
+function buildWorldPaint(countries: string[]): any {
+  const names = countries.filter(c => c !== 'China');
+  if (names.length === 0) return { 'fill-color': '#e5e7eb', 'fill-opacity': 0.3 };
   return {
-    'fill-color': ['match', ['get', 'name'], countries, '#4ade80', '#e5e7eb'],
-    'fill-opacity': ['match', ['get', 'name'], countries, 0.6, 0.3],
+    'fill-color': ['match', ['get', 'name'], names, '#4ade80', '#e5e7eb'],
+    'fill-opacity': ['match', ['get', 'name'], names, 0.6, 0.3],
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const provincePaint: any = visitedProvinceGeoNames.length > 0
-  ? {
-      'fill-color': ['match', ['get', 'name'], visitedProvinceGeoNames, '#facc15', 'transparent'],
-      'fill-opacity': ['match', ['get', 'name'], visitedProvinceGeoNames, 0.5, 0],
-    }
-  : { 'fill-color': 'transparent', 'fill-opacity': 0 };
+function buildProvincePaint(provinces: string[]): any {
+  if (provinces.length === 0) return { 'fill-color': 'transparent', 'fill-opacity': 0 };
+  return {
+    'fill-color': ['match', ['get', 'name'], provinces, '#facc15', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], provinces, 0.5, 0],
+  };
+}
 
-// City paint — highlights:
-//  • regular prefecture-level cities that match visitedChinaCities (exact name match)
-//  • all districts of visited 直辖市
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildCityPaint(features: GeoJSON.Feature[]): any {
-  const highlightedNames: string[] = [];
+function buildCityPaint(features: GeoJSON.Feature[], visitedCities: string[], visitedProvinceGeoNames: string[]): any {
+  const highlighted: string[] = [];
 
   for (const f of features) {
     const { name, level, adcode, parent } = f.properties as {
@@ -65,31 +90,24 @@ function buildCityPaint(features: GeoJSON.Feature[]): any {
     };
 
     if (level === 'city') {
-      // Regular prefecture: check if name matches visitedChinaCities
-      if (travelConfig.visitedChinaCities.some(v => name === v || name.includes(v) || v.includes(name.replace('市', '')))) {
-        highlightedNames.push(name);
-      }
+      if (visitedCities.includes(name)) highlighted.push(name);
     } else if (level === 'district') {
-      // District belongs to a 直辖市 — highlight if that province is visited
+      // Districts of 直辖市 — highlight if that 直辖市 is visited as a province
       const provinceAdcode = parent?.adcode ?? Math.floor(adcode / 10000) * 10000;
-      if (ZHIXIASHI_ADCODES.includes(provinceAdcode)) {
-        const provinceMap: Record<number, string> = {
-          110000: '北京', 120000: '天津', 310000: '上海', 500000: '重庆',
-        };
-        const shortName = provinceMap[provinceAdcode];
-        if (shortName && visitedZhixiashiProvinces.includes(shortName)) {
-          highlightedNames.push(name);
-        }
+      const provinceAdcodeMap: Record<number, string> = {
+        110000: '北京市', 120000: '天津市', 310000: '上海市', 500000: '重庆市',
+      };
+      const geoName = provinceAdcodeMap[provinceAdcode];
+      if (geoName && visitedProvinceGeoNames.includes(geoName)) {
+        highlighted.push(name);
       }
     }
   }
 
-  if (highlightedNames.length === 0) {
-    return { 'fill-color': 'transparent', 'fill-opacity': 0 };
-  }
+  if (highlighted.length === 0) return { 'fill-color': 'transparent', 'fill-opacity': 0 };
   return {
-    'fill-color': ['match', ['get', 'name'], highlightedNames, '#fb923c', 'transparent'],
-    'fill-opacity': ['match', ['get', 'name'], highlightedNames, 0.55, 0],
+    'fill-color': ['match', ['get', 'name'], highlighted, '#fb923c', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], highlighted, 0.55, 0],
   };
 }
 
@@ -97,32 +115,38 @@ function buildCityPaint(features: GeoJSON.Feature[]): any {
 
 interface Props {
   journeys: Journey[];
-  onMarkerClick: (journey: Journey) => void;
-  granularity: Granularity;
 }
 
-export default function TravelMap({ journeys, onMarkerClick, granularity }: Props) {
+export default function TravelMap({ journeys }: Props) {
+  const [worldData, setWorldData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cityData, setCityData] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [cityPaint, setCityPaint] = useState<object | null>(null);
-  const loadingRef = useRef(false);
+  const cityLoadingRef = useRef(false);
 
-  // Lazy-load city GeoJSON only when switching to city granularity
   useEffect(() => {
-    if (granularity !== 'city' || cityData || loadingRef.current) return;
-    loadingRef.current = true;
+    loadWorldGeoJSON().then(setWorldData).catch(console.error);
+  }, []);
+
+  const { countries, provinces, cities } = useMemo(() => deriveHighlights(journeys), [journeys]);
+
+  const hasChinaContent = provinces.length > 0 || cities.length > 0;
+
+  // Lazy-load city GeoJSON whenever there are city-type locations
+  useEffect(() => {
+    if (cities.length === 0 || cityData || cityLoadingRef.current) return;
+    cityLoadingRef.current = true;
     fetch('/china-cities.json')
       .then(r => r.json())
-      .then((data: GeoJSON.FeatureCollection) => {
-        setCityData(data);
-        setCityPaint(buildCityPaint(data.features as GeoJSON.Feature[]));
-      })
+      .then((data: GeoJSON.FeatureCollection) => setCityData(data))
       .catch(console.error)
-      .finally(() => { loadingRef.current = false; });
-  }, [granularity, cityData]);
+      .finally(() => { cityLoadingRef.current = false; });
+  }, [cities, cityData]);
 
-  const showCountryChina = granularity === 'country';
-  const showProvinces = granularity === 'province';
-  const showCities = granularity === 'city';
+  const worldPaint = useMemo(() => buildWorldPaint(countries), [countries]);
+  const provincePaint = useMemo(() => buildProvincePaint(provinces), [provinces]);
+  const cityPaint = useMemo(() => {
+    if (!cityData) return null;
+    return buildCityPaint(cityData.features as GeoJSON.Feature[], cities, provinces);
+  }, [cityData, cities, provinces]);
 
   return (
     <div className="w-full h-full">
@@ -134,29 +158,33 @@ export default function TravelMap({ journeys, onMarkerClick, granularity }: Prop
       >
         <NavigationControl position="top-left" />
 
-        {/* World countries — China filtered out unless granularity=country */}
-        <Source id="world" type="geojson" data="/world-atlas.json">
-          <Layer
-            id="world-fill"
-            type="fill"
-            paint={worldPaint(showCountryChina)}
-            filter={showCountryChina ? undefined : ['!=', ['get', 'name'], 'China']}
-          />
-          <Layer
-            id="world-border"
-            type="line"
-            paint={{ 'line-color': '#ffffff', 'line-width': 0.5 }}
-            filter={showCountryChina ? undefined : ['!=', ['get', 'name'], 'China']}
-          />
-        </Source>
+        {/* World countries — always shown, China excluded (handled by province layer) */}
+        {worldData && (
+          <Source id="world" type="geojson" data={worldData}>
+            <Layer
+              id="world-fill"
+              type="fill"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={worldPaint as any}
+              filter={['!=', ['get', 'name'], 'China']}
+            />
+            <Layer
+              id="world-border"
+              type="line"
+              paint={{ 'line-color': '#ffffff', 'line-width': 0.5 }}
+              filter={['!=', ['get', 'name'], 'China']}
+            />
+          </Source>
+        )}
 
-        {/* China provinces — visible in province mode */}
-        {(showProvinces || showCities) && (
+        {/* China provinces — shown whenever there's province or city content */}
+        {hasChinaContent && (
           <Source id="china" type="geojson" data="/china-provinces.json">
             <Layer
               id="china-fill"
               type="fill"
-              paint={showProvinces ? provincePaint : { 'fill-color': 'transparent', 'fill-opacity': 0 }}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={provincePaint as any}
             />
             <Layer
               id="china-border"
@@ -166,9 +194,9 @@ export default function TravelMap({ journeys, onMarkerClick, granularity }: Prop
           </Source>
         )}
 
-        {/* City boundaries — visible in city mode, lazy-loaded */}
-        {showCities && cityData && cityPaint && (
-          <Source id="cities" type="geojson" data={cityData}>
+        {/* City boundaries — shown when city-type locations exist */}
+        {cities.length > 0 && cityData && cityPaint && (
+          <Source id="city-boundaries" type="geojson" data={cityData}>
             <Layer
               id="city-fill"
               type="fill"
@@ -182,83 +210,7 @@ export default function TravelMap({ journeys, onMarkerClick, granularity }: Prop
             />
           </Source>
         )}
-
-        {/* Journey markers */}
-        <JourneyMarkers journeys={journeys} onMarkerClick={onMarkerClick} />
       </Map>
     </div>
   );
-}
-
-// Inner component so it can use useMap hook
-function JourneyMarkers({ journeys, onMarkerClick }: Pick<Props, 'journeys' | 'onMarkerClick'>) {
-  return (
-    <>
-      {journeys.map(journey => {
-        let coords = journey.coordinates;
-        if (!coords) {
-          for (const province of CHINA_PROVINCES) {
-            const city = province.cities.find(c => c.name === journey.location);
-            if (city) { coords = [city.lat, city.lng]; break; }
-            if (province.name === journey.location) { coords = [province.lat, province.lng]; break; }
-          }
-        }
-        if (!coords) return null;
-        const [lat, lng] = coords;
-
-        return (
-          <JourneyMarker
-            key={journey.id}
-            lat={lat}
-            lng={lng}
-            journey={journey}
-            onClick={onMarkerClick}
-          />
-        );
-      })}
-    </>
-  );
-}
-
-import maplibregl from 'maplibre-gl';
-
-interface MarkerProps {
-  lat: number;
-  lng: number;
-  journey: Journey;
-  onClick: (journey: Journey) => void;
-}
-
-function JourneyMarker({ lat, lng, journey, onClick }: MarkerProps) {
-  const { current: map } = useMap();
-  const markerRef = useRef<maplibregl.Marker | null>(null);
-
-  const handleClick = useCallback(() => onClick(journey), [journey, onClick]);
-
-  useEffect(() => {
-    if (!map) return;
-
-    const el = document.createElement('div');
-    el.innerHTML = `
-      <div style="animation: bounce 1s infinite; cursor: pointer;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 20 20" fill="#ef4444" style="filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4))">
-          <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-        </svg>
-      </div>
-    `;
-    el.addEventListener('click', handleClick);
-
-    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-      .setLngLat([lng, lat])
-      .addTo(map.getMap());
-
-    markerRef.current = marker;
-
-    return () => {
-      el.removeEventListener('click', handleClick);
-      marker.remove();
-    };
-  }, [map, lat, lng, handleClick]);
-
-  return null;
 }

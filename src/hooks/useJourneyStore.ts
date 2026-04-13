@@ -6,7 +6,11 @@ const STORAGE_KEY = 'travel_globe_journeys';
 function loadFromStorage(): Journey[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : travelConfig.journeys;
+    if (!raw) return travelConfig.journeys;
+    const parsed = JSON.parse(raw) as Journey[];
+    // Discard journeys with old schema (no locations array) to avoid runtime crashes
+    const valid = Array.isArray(parsed) ? parsed.filter(j => Array.isArray(j.locations)) : [];
+    return valid.length > 0 ? valid : travelConfig.journeys;
   } catch {
     return travelConfig.journeys;
   }
