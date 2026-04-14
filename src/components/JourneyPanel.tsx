@@ -5,7 +5,7 @@ import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate
 import { filterJourneysByRecordFilter } from '../utils/journeyRecordFilter';
 import type { JourneyRecordFilter } from '../types/journey';
 import { getCountryNameForLocation } from '../data/locationData';
-import { getWorldCountryIso3, TOTAL_MAPPED_WORLD_COUNTRIES } from '../data/worldCountryIso3';
+import { getWorldCountryIso3 } from '../data/worldCountryIso3';
 import TransportModeIcon from './TransportModeIcon';
 
 interface Props {
@@ -203,9 +203,9 @@ export default function JourneyPanel({
     ),
     [journeys],
   );
-  const worldFootprintCount = visitedCountryCodes.length;
-  const worldFootprintTotal = TOTAL_MAPPED_WORLD_COUNTRIES;
-  const worldFootprintProgress = worldFootprintTotal === 0 ? 0 : (worldFootprintCount / worldFootprintTotal) * 100;
+  const worldFootprintCount = stats.worldVisitedUnits;
+  const worldFootprintTotal = stats.totalWorldCountries;
+  const worldFootprintProgress = stats.worldProgress;
 
   if (!isOpen) return null;
 
@@ -268,27 +268,10 @@ export default function JourneyPanel({
                 />
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-5">
-                <StatBlock
-                  label="国家"
-                  value={stats.countryCount}
-                  accentClassName="bg-slate-500"
-                />
-                <StatBlock
-                  label="省份"
-                  value={stats.provinceCount}
-                  accentClassName="bg-stone-400"
-                />
-              </div>
-
-              <div className="mt-5 divide-y divide-stone-200/80 border-t border-stone-200/80">
-                <ProgressMeter
-                  label="中国旅行进度"
-                  value={stats.chinaProgress}
-                  numerator={stats.chinaVisitedUnits}
-                  denominator={stats.totalChinaUnits}
-                  railClassName="bg-stone-200"
-                  fillClassName="bg-stone-800"
+              <div className="mt-5 border-t border-stone-200/80 pt-5">
+                <ChinaTravelBoard
+                  cityCount={stats.cityCount}
+                  totalCityCount={stats.totalChinaCities}
                 />
               </div>
             </section>
@@ -509,63 +492,63 @@ function WorldFootprintBoard({
   );
 }
 
-function StatBlock({
-  label,
-  value,
-  accentClassName,
+function ChinaTravelBoard({
+  cityCount,
+  totalCityCount,
 }: {
-  label: string;
-  value: number;
-  accentClassName: string;
+  cityCount: number;
+  totalCityCount: number;
 }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${accentClassName}`} />
-        <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">{label}</p>
-      </div>
-      <p className="font-editorial font-tabular mt-3 text-[2.2rem] leading-none text-stone-900">{value}</p>
-    </div>
+  const normalizedCityCount = Math.min(cityCount, totalCityCount);
+  const cityProgress = totalCityCount === 0 ? 0 : (normalizedCityCount / totalCityCount) * 100;
+  const footprintCells = useMemo(
+    () => Array.from({ length: totalCityCount }, (_, index) => index < normalizedCityCount),
+    [normalizedCityCount, totalCityCount],
   );
-}
-
-function ProgressMeter({
-  label,
-  value,
-  numerator,
-  denominator,
-  railClassName,
-  fillClassName,
-}: {
-  label: string;
-  value: number;
-  numerator: number;
-  denominator: number;
-  railClassName: string;
-  fillClassName: string;
-}) {
-  const visualValue = value === 0 ? 0 : Math.max(value, 3.5);
 
   return (
-    <div className="py-5">
-      <div className="flex items-end justify-between gap-4">
-        <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">{label}</p>
-        <div className="text-right">
+    <div className="relative overflow-hidden rounded-[28px] border border-stone-200/80 bg-[#fbf7ef] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.56)]">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.58)_0%,rgba(255,255,255,0)_34%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_left_top,rgba(15,23,42,0.05)_0%,rgba(15,23,42,0)_36%)]" />
+
+      <div className="relative flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.26em] text-stone-500">China Footprint</p>
+          <h4 className="font-editorial mt-2 text-[1.55rem] leading-none text-stone-900">中国旅行足迹</h4>
+        </div>
+
+        <div className="shrink-0 text-right">
           <p className="font-editorial font-tabular text-[2.15rem] leading-none text-stone-900">
-            {formatPercent(value)}
+            {formatPercent(cityProgress)}
             <span className="ml-0.5 text-base text-stone-500">%</span>
           </p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-stone-500">
-            {numerator} / {denominator}
+            {normalizedCityCount} / {totalCityCount}
           </p>
         </div>
       </div>
 
-      <div className={`mt-4 h-2 overflow-hidden rounded-full ${railClassName}`}>
-        <div
-          className={`h-full rounded-full transition-[width] duration-500 ${fillClassName}`}
-          style={{ width: `${visualValue}%` }}
-        />
+      <div className="relative mt-5 overflow-hidden rounded-[24px] border border-stone-200/80 bg-white/80 px-4 py-4">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.03)_0%,rgba(15,23,42,0)_100%)]" />
+
+        <div className="relative flex items-center justify-between gap-3">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">333 Prefecture Units</p>
+          <div className="h-px flex-1 bg-stone-200/80" />
+          <p className="font-tabular text-[10px] tracking-[0.18em] text-stone-400">CN</p>
+        </div>
+
+        <div className="relative mt-4 grid grid-cols-[repeat(37,minmax(0,1fr))] gap-[3px]">
+          {footprintCells.map((active, index) => (
+            <span
+              key={index}
+              className={`aspect-square rounded-[3px] border transition-colors ${
+                active
+                  ? 'border-stone-800/85 bg-stone-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                  : 'border-stone-200/80 bg-stone-100/92'
+              }`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

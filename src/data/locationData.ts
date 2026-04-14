@@ -100,7 +100,9 @@ const CITIES: LocationOption[] = CHINA_PROVINCES.flatMap(p =>
     }]
 );
 
-export const TOTAL_TRACKABLE_CHINA_CITIES = CITIES.length;
+// The picker still keeps some special-region entries for recording,
+// but China progress follows the 333-prefecture-level-unit statistic.
+export const TOTAL_TRACKABLE_CHINA_CITIES = 333;
 export const TOTAL_TRACKABLE_WORLD_COUNTRIES = COUNTRIES.length;
 
 const allLocations: LocationOption[] = [...COUNTRIES, ...PROVINCES, ...CITIES];

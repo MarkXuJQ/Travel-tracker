@@ -4,11 +4,10 @@ import {
   getCountryNameForLocation,
   getProvinceLabelByCityName,
   TOTAL_TRACKABLE_CHINA_CITIES,
-  TOTAL_TRACKABLE_WORLD_COUNTRIES,
 } from '../data/locationData';
 import type { Journey } from '../types/journey';
 
-const TOTAL_WORLD_COUNTRIES = TOTAL_TRACKABLE_WORLD_COUNTRIES;
+const TOTAL_WORLD_COUNTRIES = 195;
 const TOTAL_CHINA_PROVINCES = CHINA_PROVINCES.length;
 const TOTAL_CHINA_CITIES = TOTAL_TRACKABLE_CHINA_CITIES;
 
@@ -72,14 +71,15 @@ export function getTravelStats(journeys: Journey[]): TravelStats {
     }
   }
 
-  const chinaVisitedUnits = visitedProvinces.size + visitedCities.size;
+  const normalizedCityCount = Math.min(visitedCities.size, TOTAL_CHINA_CITIES);
+  const chinaVisitedUnits = visitedProvinces.size + normalizedCityCount;
   const totalChinaUnits = TOTAL_CHINA_PROVINCES + TOTAL_CHINA_CITIES;
 
   return {
     journeyCount: journeys.length,
     countryCount: visitedCountries.size,
     provinceCount: visitedProvinces.size,
-    cityCount: visitedCities.size,
+    cityCount: normalizedCityCount,
     chinaProgress: totalChinaUnits === 0 ? 0 : (chinaVisitedUnits / totalChinaUnits) * 100,
     worldProgress: (visitedCountries.size / TOTAL_WORLD_COUNTRIES) * 100,
     chinaVisitedUnits,
