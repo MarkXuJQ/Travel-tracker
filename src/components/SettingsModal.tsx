@@ -1,35 +1,24 @@
 import { useEffect, useState } from 'react';
 import type { JourneyLocation } from '../types/journey';
-import type { BaseMapMode } from './TravelMap';
 import LocationPicker from './LocationPicker';
 
 interface Props {
   isOpen: boolean;
-  baseMap: BaseMapMode;
   showProvinceHighlights: boolean;
   birthplace: JourneyLocation | null;
   passengerName: string;
   onClose: () => void;
-  onBaseMapChange: (mode: BaseMapMode) => void;
   onProvinceHighlightChange: (enabled: boolean) => void;
   onBirthplaceChange: (birthplace: JourneyLocation | null) => void;
   onPassengerNameChange: (passengerName: string) => void;
 }
 
-const BASE_MAP_OPTIONS: Array<{ key: BaseMapMode; label: string; description: string }> = [
-  { key: 'liberty', label: '彩色', description: '层次更丰富，适合日间浏览。' },
-  { key: 'bright', label: '明亮', description: '信息更清爽，适合查看路线。' },
-  { key: 'night', label: '夜间', description: '纯黑夜景，更适合暗光环境。' },
-];
-
 export default function SettingsModal({
   isOpen,
-  baseMap,
   showProvinceHighlights,
   birthplace,
   passengerName,
   onClose,
-  onBaseMapChange,
   onProvinceHighlightChange,
   onBirthplaceChange,
   onPassengerNameChange,
@@ -85,7 +74,7 @@ export default function SettingsModal({
               <p className="text-[10px] uppercase tracking-[0.34em] text-stone-500">Settings</p>
               <h2 className="font-editorial mt-3 text-[2rem] leading-none text-stone-900">地图与记录设置</h2>
               <p className="mt-3 text-sm leading-6 text-stone-600">
-                把底图、家乡和省域显示放到同一个地方，后续想调整时会更直观。
+                把家乡、省域显示和票面信息收在一起，后续调整会更清爽。
               </p>
             </div>
 
@@ -101,43 +90,6 @@ export default function SettingsModal({
           </div>
 
           <div className="relative space-y-6 px-6 py-6 sm:px-7">
-            <section className="space-y-3">
-              <div className="flex items-start justify-between gap-4 border-b border-stone-200/70 pb-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Base Map</p>
-                  <h3 className="mt-2 text-base font-medium text-stone-900">地图图层</h3>
-                </div>
-                <p className="max-w-[13rem] text-right text-xs leading-5 text-stone-500">
-                  选择最适合当前浏览环境的底图。
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {BASE_MAP_OPTIONS.map(option => {
-                  const selected = option.key === baseMap;
-
-                  return (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={`rounded-2xl border px-3 py-3 text-left transition ${
-                        selected
-                          ? 'border-stone-900 bg-stone-900 text-white shadow-[0_14px_24px_-22px_rgba(15,23,42,0.55)]'
-                          : 'border-stone-200 bg-white/82 text-stone-700 hover:border-stone-300 hover:bg-white'
-                      }`}
-                      onClick={() => onBaseMapChange(option.key)}
-                      aria-pressed={selected}
-                    >
-                      <p className="text-sm font-medium">{option.label}</p>
-                      <p className={`mt-2 text-xs leading-5 ${selected ? 'text-stone-200' : 'text-stone-500'}`}>
-                        {option.description}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-4 border-b border-stone-200/70 pb-3">
                 <div>

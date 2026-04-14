@@ -6,6 +6,7 @@ import SettingsModal from './SettingsModal';
 import TravelMap, { type BaseMapMode } from './TravelMap';
 import JourneyEditorModal from './JourneyEditorModal';
 import JourneyPanel from './JourneyPanel';
+import JourneyOverviewDrawer from './JourneyOverviewDrawer';
 
 const BASE_MAP_STORAGE_KEY = 'travel-tracker-base-map';
 const PROVINCE_HIGHLIGHT_STORAGE_KEY = 'travel-tracker-province-highlight';
@@ -54,9 +55,11 @@ export default function TravelTracker() {
 
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<JourneyRecordFilter | null>(null);
+  const [selectedProvinceName, setSelectedProvinceName] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorJourney, setEditorJourney] = useState<Journey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(true);
 
   useEffect(() => {
     if (selectedJourneyId && !journeys.some(journey => journey.id === selectedJourneyId)) {
@@ -130,6 +133,10 @@ export default function TravelTracker() {
     updateJourney(id, journey);
   };
 
+  const handleProvinceSelect = (provinceName: string) => {
+    setSelectedProvinceName(provinceName);
+    setOverviewOpen(true);
+  };
   const handleVisitedLocationSelect = (filter: JourneyRecordFilter) => {
     const matchingJourneys = filterJourneysByRecordFilter(journeys, filter);
 
@@ -159,8 +166,11 @@ export default function TravelTracker() {
         showProvinceHighlights={showProvinceHighlights}
         baseMap={baseMap}
         selectedJourney={selectedJourney}
+        selectedProvinceName={overviewOpen ? selectedProvinceName : null}
+        selectionMode={overviewOpen ? 'province-stats' : 'records'}
         panelOpen={panelOpen}
         onVisitedLocationSelect={handleVisitedLocationSelect}
+        onProvinceSelect={handleProvinceSelect}
       />
 
       <div className={`absolute top-4 z-[2100] flex flex-col gap-2 transition-all ${topControlsPosition}`}>
@@ -231,15 +241,22 @@ export default function TravelTracker() {
 
       <SettingsModal
         isOpen={settingsOpen}
-        baseMap={baseMap}
         showProvinceHighlights={showProvinceHighlights}
         birthplace={birthplace}
         passengerName={passengerName}
         onClose={closeSettings}
-        onBaseMapChange={setBaseMap}
         onProvinceHighlightChange={setShowProvinceHighlights}
         onBirthplaceChange={setBirthplace}
         onPassengerNameChange={setPassengerName}
+      />
+
+      <JourneyOverviewDrawer
+        isOpen={overviewOpen}
+        archiveOpen={panelOpen}
+        journeys={journeys}
+        selectedProvinceName={selectedProvinceName}
+        onProvinceSelect={setSelectedProvinceName}
+        onToggle={() => setOverviewOpen(current => !current)}
       />
 
       <JourneyPanel
@@ -258,6 +275,41 @@ export default function TravelTracker() {
         onEditJourney={openEditJourneyEditor}
         onClearFilter={() => setActiveFilter(null)}
       />
+
+      <div className="absolute bottom-5 left-4 z-[2100] sm:bottom-6">
+        <div
+          className={`flex items-center gap-1 rounded-full border px-1.5 py-1.5 shadow-[0_18px_40px_-26px_rgba(15,23,42,0.32)] ${
+            isNightMode
+              ? 'border-slate-700 bg-slate-950 text-slate-100'
+              : 'border-stone-200 bg-[#f6f1e8] text-stone-700'
+          }`}
+        >
+          {BASE_MAP_OPTIONS.map(option => {
+            const selected = option.key === baseMap;
+
+            return (
+              <button
+                key={option.key}
+                type="button"
+                className={`rounded-full px-3 py-2 text-xs tracking-[0.2em] transition sm:px-4 ${
+                  selected
+                    ? isNightMode
+                      ? 'bg-slate-100 text-slate-950'
+                      : 'bg-stone-900 text-white'
+                    : isNightMode
+                      ? 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                      : 'text-stone-500 hover:bg-white hover:text-stone-900'
+                }`}
+                onClick={() => setBaseMap(option.key)}
+                aria-pressed={selected}
+                title={option.title}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

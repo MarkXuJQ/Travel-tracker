@@ -218,8 +218,11 @@ interface Props {
   showProvinceHighlights?: boolean;
   baseMap?: BaseMapMode;
   selectedJourney?: Journey | null;
+  selectedProvinceName?: string | null;
+  selectionMode?: 'records' | 'province-stats';
   panelOpen?: boolean;
   onVisitedLocationSelect?: (filter: JourneyRecordFilter) => void;
+  onProvinceSelect?: (provinceName: string) => void;
 }
 
 interface RouteStop {
@@ -306,6 +309,92 @@ function getProvinceGeoNameFromCityFeature(feature: MapGeoJSONFeature) {
   return DIRECT_MUNICIPALITY_PROVINCE_GEO_NAME_BY_ADCODE[provinceAdcode] ?? null;
 }
 
+function walkGeometryCoordinates(
+  coordinates: GeoJSON.Position | GeoJSON.Position[] | GeoJSON.Position[][] | GeoJSON.Position[][][],
+  visit: (lng: number, lat: number) => void,
+) {
+  if (!Array.isArray(coordinates) || coordinates.length === 0) return;
+
+  if (typeof coordinates[0] === 'number') {
+    visit(coordinates[0] as number, coordinates[1] as number);
+    return;
+  }
+
+  (coordinates as Array<GeoJSON.Position | GeoJSON.Position[] | GeoJSON.Position[][]>).forEach(child => {
+    walkGeometryCoordinates(child as GeoJSON.Position | GeoJSON.Position[] | GeoJSON.Position[][] | GeoJSON.Position[][][], visit);
+  });
+}
+
+function getFeatureBounds(feature: GeoJSON.Feature): [[number, number], [number, number]] | null {
+  if (!feature.geometry) return null;
+
+  let minLng = Number.POSITIVE_INFINITY;
+  let minLat = Number.POSITIVE_INFINITY;
+  let maxLng = Number.NEGATIVE_INFINITY;
+  let maxLat = Number.NEGATIVE_INFINITY;
+
+  const visit = (lng: number, lat: number) => {
+    minLng = Math.min(minLng, lng);
+    minLat = Math.min(minLat, lat);
+    maxLng = Math.max(maxLng, lng);
+    maxLat = Math.max(maxLat, lat);
+  };
+
+  if (feature.geometry.type === 'GeometryCollection') {
+    feature.geometry.geometries.forEach(geometry => {
+      if ('coordinates' in geometry) {
+        walkGeometryCoordinates(
+          geometry.coordinates as GeoJSON.Position | GeoJSON.Position[] | GeoJSON.Position[][] | GeoJSON.Position[][][],
+          visit,
+        );
+      }
+    });
+  } else {
+    walkGeometryCoordinates(
+      feature.geometry.coordinates as GeoJSON.Position | GeoJSON.Position[] | GeoJSON.Position[][] | GeoJSON.Position[][][],
+      visit,
+    );
+  }
+
+  if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) {
+    return null;
+  }
+
+  return [
+    [minLng, minLat],
+    [maxLng, maxLat],
+  ];
+}
+
+function resolveProvinceSelectionFromFeatures(features: MapGeoJSONFeature[] | undefined): string | null {
+  if (!features || features.length === 0) return null;
+
+  const orderedFeatures = [...features].sort((left, right) => {
+    const rank = (feature: MapGeoJSONFeature) => {
+      if (feature.layer.id === 'city-fill') return 0;
+      if (feature.layer.id === 'china-fill') return 1;
+      return 2;
+    };
+
+    return rank(left) - rank(right);
+  });
+
+  for (const feature of orderedFeatures) {
+    const rawName = feature.properties?.name;
+    if (typeof rawName !== 'string') continue;
+
+    if (feature.layer.id === 'city-fill') {
+      return getProvinceGeoNameByCityName(rawName) ?? getProvinceGeoNameFromCityFeature(feature);
+    }
+
+    if (feature.layer.id === 'china-fill') {
+      return rawName;
+    }
+  }
+
+  return null;
+}
+
 function resolveVisitedLocationFilterFromFeatures(
   features: MapGeoJSONFeature[] | undefined,
   visitedCountries: Set<string>,
@@ -378,10 +467,14 @@ export default function TravelMap({
   showProvinceHighlights = true,
   baseMap = 'liberty',
   selectedJourney = null,
+  selectedProvinceName = null,
+  selectionMode = 'province-stats',
   panelOpen = false,
   onVisitedLocationSelect,
+  onProvinceSelect,
 }: Props) {
   const [worldData, setWorldData] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [chinaProvinceData, setChinaProvinceData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cityData, setCityData] = useState<GeoJSON.FeatureCollection | null>(null);
   const mapRef = useRef<MapRef | null>(null);
   const cityLoadingRef = useRef(false);
@@ -392,6 +485,13 @@ export default function TravelMap({
     loadWorldGeoJSON().then(setWorldData).catch(console.error);
   }, []);
 
+  useEffect(() => {
+    fetch('/china-provinces.json')
+      .then(r => r.json())
+      .then((data: GeoJSON.FeatureCollection) => setChinaProvinceData(data))
+      .catch(console.error);
+  }, []);
+
   const { countries, provinces, cities } = useMemo(() => deriveHighlights(journeys), [journeys]);
   const visitedCountrySet = useMemo(() => new Set(countries), [countries]);
   const visitedProvinceSet = useMemo(() => new Set(provinces), [provinces]);
@@ -400,8 +500,6 @@ export default function TravelMap({
     () => (birthplace ? getCountryNameForLocation(birthplace) : null),
     [birthplace],
   );
-
-  const hasChinaContent = provinces.length > 0 || cities.length > 0;
 
   // Lazy-load city GeoJSON whenever there are city-type locations
   useEffect(() => {
@@ -422,6 +520,42 @@ export default function TravelMap({
     () => (showProvinceHighlights ? buildProvincePaint(provinces, mapTheme.tone) : { 'fill-color': 'transparent', 'fill-opacity': 0 }),
     [mapTheme.tone, provinces, showProvinceHighlights],
   );
+  const selectedProvinceFillPaint = useMemo(() => {
+    if (!selectedProvinceName) {
+      return { 'fill-color': 'transparent', 'fill-opacity': 0 };
+    }
+
+    if (mapTheme.tone === 'night') {
+      return {
+        'fill-color': ['match', ['get', 'name'], [selectedProvinceName], '#b5e8fb', 'transparent'],
+        'fill-opacity': ['match', ['get', 'name'], [selectedProvinceName], 0.16, 0],
+      };
+    }
+
+    return {
+      'fill-color': ['match', ['get', 'name'], [selectedProvinceName], '#e8dcc6', 'transparent'],
+      'fill-opacity': ['match', ['get', 'name'], [selectedProvinceName], 0.46, 0],
+    };
+  }, [mapTheme.tone, selectedProvinceName]);
+  const selectedProvinceBorderPaint = useMemo(() => {
+    if (!selectedProvinceName) {
+      return { 'line-color': 'transparent', 'line-opacity': 0, 'line-width': 0 };
+    }
+
+    if (mapTheme.tone === 'night') {
+      return {
+        'line-color': ['match', ['get', 'name'], [selectedProvinceName], '#67e8f9', 'transparent'],
+        'line-opacity': ['match', ['get', 'name'], [selectedProvinceName], 0.92, 0],
+        'line-width': ['match', ['get', 'name'], [selectedProvinceName], 1.35, 0],
+      };
+    }
+
+    return {
+      'line-color': ['match', ['get', 'name'], [selectedProvinceName], '#2f2419', 'transparent'],
+      'line-opacity': ['match', ['get', 'name'], [selectedProvinceName], 0.82, 0],
+      'line-width': ['match', ['get', 'name'], [selectedProvinceName], 1.1, 0],
+    };
+  }, [mapTheme.tone, selectedProvinceName]);
   const highlightedCityNames = useMemo(() => {
     if (!cityData) return [];
     return getHighlightedCityNames(cityData.features as GeoJSON.Feature[], cities, provinces);
@@ -471,6 +605,26 @@ export default function TravelMap({
     );
   }, [panelOpen, selectedRouteStops]);
 
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !selectedProvinceName || !chinaProvinceData) return;
+
+    const selectedFeature = chinaProvinceData.features.find(feature => feature.properties?.name === selectedProvinceName);
+    const bounds = selectedFeature ? getFeatureBounds(selectedFeature) : null;
+    if (!bounds) return;
+
+    map.fitBounds(bounds, {
+      padding: {
+        top: 86,
+        bottom: 118,
+        left: 86,
+        right: panelOpen ? 470 : 132,
+      },
+      duration: 860,
+      maxZoom: 6.2,
+    });
+  }, [chinaProvinceData, panelOpen, selectedProvinceName]);
+
   const routeStopHaloPaint = isNightMode
     ? { 'circle-color': '#67e8f9', 'circle-opacity': 0.24, 'circle-radius': 9.5 }
     : { 'circle-color': '#94a3b8', 'circle-opacity': 0.16, 'circle-radius': 7.5 };
@@ -479,18 +633,16 @@ export default function TravelMap({
     : { 'circle-color': '#ffffff', 'circle-radius': 4.8, 'circle-stroke-color': '#475569', 'circle-stroke-width': 1.5 };
   const routeOrderPaint = isNightMode ? { 'text-color': '#082f49' } : { 'text-color': '#334155' };
   const interactiveLayerIds = useMemo(() => {
-    const layerIds = ['world-fill'];
-
-    if (hasChinaContent && showProvinceHighlights) {
-      layerIds.push('china-fill');
-    }
+    const layerIds = selectionMode === 'records'
+      ? ['world-fill', 'china-fill']
+      : ['china-fill'];
 
     if (cities.length > 0 && cityData) {
       layerIds.push('city-fill');
     }
 
     return layerIds;
-  }, [cities.length, cityData, hasChinaContent, showProvinceHighlights]);
+  }, [cities.length, cityData, selectionMode]);
 
   return (
     <div className={`map-shell ${isNightMode ? 'map-shell--night' : 'map-shell--light'} ${mapTheme.shellClassName} w-full h-full`}>
@@ -502,6 +654,18 @@ export default function TravelMap({
         minZoom={1.5}
         interactiveLayerIds={interactiveLayerIds}
         onClick={(event: MapLayerMouseEvent) => {
+          if (selectionMode === 'province-stats') {
+            const nextSelectedProvinceName = resolveProvinceSelectionFromFeatures(
+              event.features as MapGeoJSONFeature[] | undefined,
+            );
+
+            if (nextSelectedProvinceName) {
+              onProvinceSelect?.(nextSelectedProvinceName);
+            }
+
+            return;
+          }
+
           const filter = resolveVisitedLocationFilterFromFeatures(
             event.features as MapGeoJSONFeature[] | undefined,
             visitedCountrySet,
@@ -516,6 +680,15 @@ export default function TravelMap({
         onMouseMove={(event: MapLayerMouseEvent) => {
           const map = mapRef.current?.getMap();
           if (!map) return;
+
+          if (selectionMode === 'province-stats') {
+            const nextSelectedProvinceName = resolveProvinceSelectionFromFeatures(
+              event.features as MapGeoJSONFeature[] | undefined,
+            );
+
+            map.getCanvas().style.cursor = nextSelectedProvinceName ? 'pointer' : '';
+            return;
+          }
 
           const filter = resolveVisitedLocationFilterFromFeatures(
             event.features as MapGeoJSONFeature[] | undefined,
@@ -557,26 +730,35 @@ export default function TravelMap({
           </Source>
         )}
 
-        {/* China provinces — shown whenever there's province or city content */}
-        {hasChinaContent && (
-          <Source id="china" type="geojson" data="/china-provinces.json">
-            <Layer
-              id="china-fill"
-              type="fill"
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              paint={provincePaint as any}
-            />
-            <Layer
-              id="china-border"
-              type="line"
-              paint={{
-                'line-color': isNightMode ? '#334155' : '#475569',
-                'line-opacity': isNightMode ? 0.58 : 0.36,
-                'line-width': isNightMode ? 0.55 : 0.5,
-              }}
-            />
-          </Source>
-        )}
+        <Source id="china" type="geojson" data="/china-provinces.json">
+          <Layer
+            id="china-fill"
+            type="fill"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            paint={provincePaint as any}
+          />
+          <Layer
+            id="china-selected-fill"
+            type="fill"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            paint={selectedProvinceFillPaint as any}
+          />
+          <Layer
+            id="china-border"
+            type="line"
+            paint={{
+              'line-color': isNightMode ? '#334155' : '#475569',
+              'line-opacity': isNightMode ? 0.58 : 0.36,
+              'line-width': isNightMode ? 0.55 : 0.5,
+            }}
+          />
+          <Layer
+            id="china-selected-border"
+            type="line"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            paint={selectedProvinceBorderPaint as any}
+          />
+        </Source>
 
         {/* City boundaries — shown when city-type locations exist */}
         {cities.length > 0 && cityData && cityPaint && (

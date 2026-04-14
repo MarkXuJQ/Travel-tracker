@@ -1,11 +1,8 @@
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
-import { getTravelStats } from '../utils/travelStats';
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
 import { filterJourneysByRecordFilter } from '../utils/journeyRecordFilter';
 import type { JourneyRecordFilter } from '../types/journey';
-import { getCountryNameForLocation } from '../data/locationData';
-import { getWorldCountryIso3 } from '../data/worldCountryIso3';
 import TransportModeIcon from './TransportModeIcon';
 
 interface Props {
@@ -36,18 +33,6 @@ const TYPE_DOT: Record<JourneyLocation['type'], string> = {
 };
 
 const TRAIN_TICKET_ID = '370306 20260203 XXXX';
-const WORLD_LED_MAP_SETTINGS = {
-  height: 64,
-  grid: 'diagonal' as const,
-  projection: { name: 'robinson' as const },
-  region: {
-    lat: { min: -58, max: 84 },
-    lng: { min: -180, max: 180 },
-  },
-};
-
-let dottedMapModulePromise: Promise<typeof import('dotted-map')> | null = null;
-let cachedWorldLedBaseSvg: string | null = null;
 
 function getJourneyTransportMode(journey: Journey): JourneyTransportMode {
   if (journey.transportMode) {
@@ -88,24 +73,6 @@ function getFlightStubLabel(index: number) {
     title: 'Gate',
     value: String((index % 8) + 1).padStart(2, '0'),
   };
-}
-
-function formatPercent(value: number) {
-  if (value >= 10) return value.toFixed(0);
-  if (value >= 1) return value.toFixed(1);
-  return value.toFixed(2);
-}
-
-function svgToDataUri(svg: string) {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-function loadDottedMap() {
-  if (!dottedMapModulePromise) {
-    dottedMapModulePromise = import('dotted-map');
-  }
-
-  return dottedMapModulePromise;
 }
 
 function getJourneyTimestamp(journey: Journey) {
@@ -165,28 +132,6 @@ export default function JourneyPanel({
   onEditJourney,
   onClearFilter,
 }: Props) {
-  const stats = useMemo(() => getTravelStats(journeys), [journeys]);
-  const visitedCountryNames = useMemo(() => {
-    const countries = new Set<string>();
-
-    for (const journey of journeys) {
-      for (const location of journey.locations ?? []) {
-        const countryName = getCountryNameForLocation(location);
-        if (countryName && countryName !== 'Antarctica') {
-          countries.add(countryName);
-        }
-      }
-    }
-
-    return countries;
-  }, [journeys]);
-  const visitedCountryCodes = useMemo(
-    () => [...visitedCountryNames]
-      .map(countryName => getWorldCountryIso3(countryName))
-      .filter((countryCode): countryCode is string => Boolean(countryCode))
-      .sort(),
-    [visitedCountryNames],
-  );
   const visibleJourneys = useMemo(
     () => filterJourneysByRecordFilter(journeys, activeFilter),
     [activeFilter, journeys],
@@ -203,9 +148,6 @@ export default function JourneyPanel({
     ),
     [journeys],
   );
-  const worldFootprintCount = stats.worldVisitedUnits;
-  const worldFootprintTotal = stats.totalWorldCountries;
-  const worldFootprintProgress = stats.worldProgress;
 
   if (!isOpen) return null;
 
@@ -224,8 +166,8 @@ export default function JourneyPanel({
 
         <div className="relative flex items-start justify-between border-b border-stone-200/80 px-6 py-5">
           <div className="max-w-sm">
-            <p className="text-[10px] uppercase tracking-[0.36em] text-stone-500">Travel Register</p>
-            <h2 className="font-editorial mt-3 text-[2rem] leading-none text-stone-900">我的旅程</h2>
+            <p className="text-[10px] uppercase tracking-[0.36em] text-stone-500">Archive</p>
+            <h2 className="font-editorial mt-3 text-[2rem] leading-none text-stone-900">旅程档案</h2>
           </div>
 
           <button
@@ -241,47 +183,10 @@ export default function JourneyPanel({
 
         <div className="relative flex-1 overflow-y-auto">
           <div className="space-y-7 px-6 py-5">
-            <section>
-              <div className="border-b border-stone-200/80 pb-4">
-                <div className="flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Field Notes</p>
-                    <h3 className="font-editorial mt-3 text-[1.9rem] leading-none text-stone-900">旅行概览</h3>
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Entries</p>
-                    <p className="font-editorial font-tabular mt-2 text-[2.75rem] leading-none text-stone-900">
-                      {stats.journeyCount}
-                    </p>
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="mt-4">
-                <WorldFootprintBoard
-                  visitedCountryCodes={visitedCountryCodes}
-                  worldFootprintCount={worldFootprintCount}
-                  worldFootprintProgress={worldFootprintProgress}
-                  worldFootprintTotal={worldFootprintTotal}
-                />
-              </div>
-
-              <div className="mt-5 border-t border-stone-200/80 pt-5">
-                <ChinaTravelBoard
-                  cityCount={stats.cityCount}
-                  totalCityCount={stats.totalChinaCities}
-                />
-              </div>
-            </section>
-
-            <section className="border-t border-stone-300/70 pt-5 pb-3">
+            <section className="pb-3">
               <div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Archive</p>
-                  <h3 className="font-editorial mt-2 text-[1.65rem] leading-none text-stone-900">旅程档案</h3>
-                </div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Archive</p>
+                <h3 className="font-editorial mt-2 text-[1.65rem] leading-none text-stone-900">旅程列表</h3>
               </div>
 
               {activeFilter && (
@@ -362,195 +267,6 @@ export default function JourneyPanel({
         </div>
       </aside>
     </>
-  );
-}
-
-function WorldFootprintBoard({
-  visitedCountryCodes,
-  worldFootprintCount,
-  worldFootprintProgress,
-  worldFootprintTotal,
-}: {
-  visitedCountryCodes: string[];
-  worldFootprintCount: number;
-  worldFootprintProgress: number;
-  worldFootprintTotal: number;
-}) {
-  const [worldMapSvgSet, setWorldMapSvgSet] = useState<{ baseSvg: string; highlightedSvg: string | null } | null>(null);
-  const visitedCountryCodesKey = visitedCountryCodes.join(',');
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const buildWorldMapSvgSet = async () => {
-      const { default: DottedMap } = await loadDottedMap();
-
-      if (!cachedWorldLedBaseSvg) {
-        cachedWorldLedBaseSvg = new DottedMap(WORLD_LED_MAP_SETTINGS).getSVG({
-          shape: 'circle',
-          radius: 0.18,
-          color: '#5f666e',
-          backgroundColor: 'transparent',
-        });
-      }
-
-      const highlightedSvg = visitedCountryCodes.length > 0
-        ? new DottedMap({
-          ...WORLD_LED_MAP_SETTINGS,
-          countries: visitedCountryCodes,
-        }).getSVG({
-          shape: 'circle',
-          radius: 0.22,
-          color: '#b5e8fb',
-          backgroundColor: 'transparent',
-        })
-        : null;
-
-      const baseSvg = cachedWorldLedBaseSvg;
-      if (cancelled || !baseSvg) return;
-
-      startTransition(() => {
-        setWorldMapSvgSet({
-          baseSvg,
-          highlightedSvg,
-        });
-      });
-    };
-
-    void buildWorldMapSvgSet();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [visitedCountryCodes, visitedCountryCodesKey]);
-
-  return (
-    <div className="relative overflow-hidden rounded-[28px] border border-stone-200/80 bg-[#202427] px-4 py-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_52%)]" />
-      <div className="relative flex items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/45">World Footprint</p>
-          <h4 className="font-editorial mt-2 text-[1.55rem] leading-none text-white">世界旅行足迹</h4>
-        </div>
-
-        <div className="shrink-0 text-right">
-          <p className="font-editorial font-tabular text-[2.15rem] leading-none text-[#b5e8fb]">
-            {formatPercent(worldFootprintProgress)}
-            <span className="ml-0.5 text-base text-white/45">%</span>
-          </p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-white/42">
-            {worldFootprintCount} / {worldFootprintTotal}
-          </p>
-        </div>
-      </div>
-
-      <div className="relative mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[#171b1e] px-3 py-3">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_0px,transparent_1px)] [background-size:18px_18px]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(181,232,251,0.08)_0%,rgba(181,232,251,0)_72%)]" />
-
-        <div className="relative h-[11.25rem] overflow-hidden">
-          {worldMapSvgSet ? (
-            <>
-              <img
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 h-full w-full object-contain opacity-70"
-                src={svgToDataUri(worldMapSvgSet.baseSvg)}
-              />
-
-              {worldMapSvgSet.highlightedSvg ? (
-                <img
-                  alt="已访问国家高亮世界地图"
-                  className="absolute inset-0 h-full w-full object-contain opacity-95 drop-shadow-[0_0_18px_rgba(181,232,251,0.28)]"
-                  src={svgToDataUri(worldMapSvgSet.highlightedSvg)}
-                />
-              ) : null}
-            </>
-          ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(181,232,251,0.05)_0%,rgba(181,232,251,0)_70%)]" />
-          )}
-        </div>
-      </div>
-
-      <div className="relative mt-4 flex items-center justify-between gap-4">
-        <p className="text-sm leading-6 text-white/74">
-          已点亮 <span className="font-tabular text-white">{worldFootprintCount}</span> 个国家与地区
-        </p>
-
-        <div className="flex items-center gap-4 text-[10px] uppercase tracking-[0.22em] text-white/42">
-          <span className="inline-flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-[#b5e8fb] shadow-[0_0_12px_rgba(181,232,251,0.5)]" />
-            Visited
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
-            World
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ChinaTravelBoard({
-  cityCount,
-  totalCityCount,
-}: {
-  cityCount: number;
-  totalCityCount: number;
-}) {
-  const normalizedCityCount = Math.min(cityCount, totalCityCount);
-  const cityProgress = totalCityCount === 0 ? 0 : (normalizedCityCount / totalCityCount) * 100;
-  const footprintCells = useMemo(
-    () => Array.from({ length: totalCityCount }, (_, index) => index < normalizedCityCount),
-    [normalizedCityCount, totalCityCount],
-  );
-
-  return (
-    <div className="relative overflow-hidden rounded-[28px] border border-stone-200/80 bg-[#fbf7ef] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.56)]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.58)_0%,rgba(255,255,255,0)_34%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_left_top,rgba(15,23,42,0.05)_0%,rgba(15,23,42,0)_36%)]" />
-
-      <div className="relative flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.26em] text-stone-500">China Footprint</p>
-          <h4 className="font-editorial mt-2 text-[1.55rem] leading-none text-stone-900">中国旅行足迹</h4>
-        </div>
-
-        <div className="shrink-0 text-right">
-          <p className="font-editorial font-tabular text-[2.15rem] leading-none text-stone-900">
-            {formatPercent(cityProgress)}
-            <span className="ml-0.5 text-base text-stone-500">%</span>
-          </p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-stone-500">
-            {normalizedCityCount} / {totalCityCount}
-          </p>
-        </div>
-      </div>
-
-      <div className="relative mt-5 overflow-hidden rounded-[24px] border border-stone-200/80 bg-white/80 px-4 py-4">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.03)_0%,rgba(15,23,42,0)_100%)]" />
-
-        <div className="relative flex items-center justify-between gap-3">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">333 Prefecture Units</p>
-          <div className="h-px flex-1 bg-stone-200/80" />
-          <p className="font-tabular text-[10px] tracking-[0.18em] text-stone-400">CN</p>
-        </div>
-
-        <div className="relative mt-4 grid grid-cols-[repeat(37,minmax(0,1fr))] gap-[3px]">
-          {footprintCells.map((active, index) => (
-            <span
-              key={index}
-              className={`aspect-square rounded-[3px] border transition-colors ${
-                active
-                  ? 'border-stone-800/85 bg-stone-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                  : 'border-stone-200/80 bg-stone-100/92'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
