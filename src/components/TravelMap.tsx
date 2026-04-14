@@ -312,6 +312,7 @@ interface Props {
   birthplace?: JourneyLocation | null;
   showProvinceHighlights?: boolean;
   baseMap?: BaseMapMode;
+  enableLocationSelection?: boolean;
   selectedJourney?: Journey | null;
   selectedProvinceName?: string | null;
   selectionMode?: 'records' | 'province-stats';
@@ -561,6 +562,7 @@ export default function TravelMap({
   birthplace = null,
   showProvinceHighlights = true,
   baseMap = 'liberty',
+  enableLocationSelection = true,
   selectedJourney = null,
   selectedProvinceName = null,
   selectionMode = 'province-stats',
@@ -760,6 +762,8 @@ export default function TravelMap({
     : { 'circle-color': '#ffffff', 'circle-radius': 4.8, 'circle-stroke-color': '#475569', 'circle-stroke-width': 1.5 };
   const routeOrderPaint = isNightMode ? { 'text-color': '#082f49' } : { 'text-color': '#334155' };
   const interactiveLayerIds = useMemo(() => {
+    if (!enableLocationSelection) return undefined;
+
     const layerIds = selectionMode === 'records'
       ? ['world-fill', 'china-fill']
       : ['china-fill'];
@@ -769,7 +773,7 @@ export default function TravelMap({
     }
 
     return layerIds;
-  }, [cities.length, cityData, selectionMode]);
+  }, [cities.length, cityData, enableLocationSelection, selectionMode]);
 
   return (
     <div className={`map-shell ${isNightMode ? 'map-shell--night' : 'map-shell--light'} ${mapTheme.shellClassName} w-full h-full`}>
@@ -781,6 +785,8 @@ export default function TravelMap({
         minZoom={1.5}
         interactiveLayerIds={interactiveLayerIds}
         onClick={(event: MapLayerMouseEvent) => {
+          if (!enableLocationSelection) return;
+
           if (selectionMode === 'province-stats') {
             const nextSelectedProvinceName = resolveProvinceSelectionFromFeatures(
               event.features as MapGeoJSONFeature[] | undefined,
@@ -807,6 +813,10 @@ export default function TravelMap({
         onMouseMove={(event: MapLayerMouseEvent) => {
           const map = mapRef.current?.getMap();
           if (!map) return;
+          if (!enableLocationSelection) {
+            map.getCanvas().style.cursor = '';
+            return;
+          }
 
           if (selectionMode === 'province-stats') {
             const nextSelectedProvinceName = resolveProvinceSelectionFromFeatures(

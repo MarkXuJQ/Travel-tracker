@@ -8,6 +8,7 @@ import { getWorldCountryIso3 } from '../data/worldCountryIso3';
 interface Props {
   isOpen: boolean;
   archiveOpen?: boolean;
+  publicMode?: boolean;
   journeys: Journey[];
   selectedProvinceName?: string | null;
   onProvinceSelect?: (provinceName: string) => void;
@@ -32,6 +33,8 @@ const MIN_DRAG_HEIGHT = 26;
 const CLOSE_THRESHOLD_HEIGHT = 92;
 const CLOSE_ANIMATION_MS = 180;
 const INERTIA_DISTANCE = 180;
+const PUBLIC_DRAWER_MAX_HEIGHT = 396;
+const PUBLIC_DRAWER_OVERSHOOT = 84;
 
 function formatPercent(value: number) {
   if (value >= 10) return value.toFixed(0);
@@ -51,17 +54,29 @@ function loadDottedMap() {
   return dottedMapModulePromise;
 }
 
-function clampDrawerHeight(height: number, viewportHeight: number) {
-  return Math.min(Math.max(height, MIN_DRAWER_HEIGHT), viewportHeight);
+function getDrawerMaxHeight(viewportHeight: number, publicMode: boolean) {
+  if (!publicMode) return viewportHeight;
+
+  return Math.min(PUBLIC_DRAWER_MAX_HEIGHT, Math.max(MIN_DRAWER_HEIGHT, viewportHeight - 80));
 }
 
-function clampDraggedDrawerHeight(height: number, viewportHeight: number) {
-  return Math.min(Math.max(height, MIN_DRAG_HEIGHT), viewportHeight);
+function clampDrawerHeight(height: number, viewportHeight: number, publicMode: boolean) {
+  return Math.min(Math.max(height, MIN_DRAWER_HEIGHT), getDrawerMaxHeight(viewportHeight, publicMode));
+}
+
+function clampDraggedDrawerHeight(height: number, viewportHeight: number, publicMode: boolean) {
+  const maxHeight = getDrawerMaxHeight(viewportHeight, publicMode);
+
+  return Math.min(
+    Math.max(height, MIN_DRAG_HEIGHT),
+    publicMode ? maxHeight + PUBLIC_DRAWER_OVERSHOOT : maxHeight,
+  );
 }
 
 export default function JourneyOverviewDrawer({
   isOpen,
   archiveOpen = false,
+  publicMode = false,
   journeys,
   selectedProvinceName = null,
   onProvinceSelect,
@@ -71,7 +86,10 @@ export default function JourneyOverviewDrawer({
   const provinceStats = useMemo(() => getProvinceTravelStats(journeys), [journeys]);
   const [drawerHeight, setDrawerHeight] = useState(() => {
     if (typeof window === 'undefined') return DEFAULT_DRAWER_HEIGHT;
-    return clampDrawerHeight(Math.min(window.innerHeight * 0.42, DEFAULT_DRAWER_HEIGHT), window.innerHeight);
+    const initialHeight = publicMode
+      ? Math.min(PUBLIC_DRAWER_MAX_HEIGHT, window.innerHeight * 0.5)
+      : Math.min(window.innerHeight * 0.42, DEFAULT_DRAWER_HEIGHT);
+    return clampDrawerHeight(initialHeight, window.innerHeight, publicMode);
   });
   const dragStateRef = useRef<{
     startY: number;
@@ -122,7 +140,7 @@ export default function JourneyOverviewDrawer({
   useEffect(() => {
     const handleResize = () => {
       setDrawerHeight(currentHeight => {
-        const nextHeight = clampDrawerHeight(Math.max(currentHeight, MIN_DRAWER_HEIGHT), window.innerHeight);
+        const nextHeight = clampDrawerHeight(Math.max(currentHeight, MIN_DRAWER_HEIGHT), window.innerHeight, publicMode);
         lastSettledHeightRef.current = nextHeight;
         return nextHeight;
       });
@@ -130,7 +148,7 @@ export default function JourneyOverviewDrawer({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [publicMode]);
 
   useEffect(() => {
     return () => {
@@ -151,7 +169,7 @@ export default function JourneyOverviewDrawer({
       setDrawerHeight(currentHeight => (
         currentHeight < MIN_DRAWER_HEIGHT
           ? lastSettledHeightRef.current
-          : clampDrawerHeight(currentHeight, window.innerHeight)
+          : clampDrawerHeight(currentHeight, window.innerHeight, publicMode)
       ));
       return;
     }
@@ -159,11 +177,11 @@ export default function JourneyOverviewDrawer({
     setDrawerHeight(currentHeight => {
       const nextHeight = currentHeight < MIN_DRAWER_HEIGHT
         ? lastSettledHeightRef.current
-        : clampDrawerHeight(currentHeight, window.innerHeight);
+        : clampDrawerHeight(currentHeight, window.innerHeight, publicMode);
       lastSettledHeightRef.current = nextHeight;
       return nextHeight;
     });
-  }, [isOpen]);
+  }, [isOpen, publicMode]);
 
   const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -210,7 +228,7 @@ export default function JourneyOverviewDrawer({
       if (!dragState) return;
 
       const deltaY = moveEvent.clientY - dragState.startY;
-      const nextHeight = clampDraggedDrawerHeight(dragState.startHeight - deltaY, window.innerHeight);
+      const nextHeight = clampDraggedDrawerHeight(dragState.startHeight - deltaY, window.innerHeight, publicMode);
       const elapsed = Math.max(moveEvent.timeStamp - dragState.lastTimestamp, 1);
       const instantVelocity = (moveEvent.clientY - dragState.lastY) / elapsed;
 
@@ -240,7 +258,7 @@ export default function JourneyOverviewDrawer({
         return;
       }
 
-      const settledHeight = clampDrawerHeight(projectedHeight, window.innerHeight);
+      const settledHeight = clampDrawerHeight(projectedHeight, window.innerHeight, publicMode);
       lastSettledHeightRef.current = settledHeight;
       setDrawerHeight(settledHeight);
     };
@@ -311,14 +329,16 @@ export default function JourneyOverviewDrawer({
                 worldFootprintTotal={stats.totalWorldCountries}
               />
 
-              <ProvinceProgressBoard
-                chinaProgress={stats.chinaProgress}
-                chinaVisitedCount={stats.cityCount}
-                chinaTotalCount={stats.totalChinaCities}
-                provinceStats={provinceStats}
-                selectedProvince={selectedProvinceStat}
-                onProvinceSelect={onProvinceSelect}
-              />
+              {!publicMode && (
+                <ProvinceProgressBoard
+                  chinaProgress={stats.chinaProgress}
+                  chinaVisitedCount={stats.cityCount}
+                  chinaTotalCount={stats.totalChinaCities}
+                  provinceStats={provinceStats}
+                  selectedProvince={selectedProvinceStat}
+                  onProvinceSelect={onProvinceSelect}
+                />
+              )}
             </div>
           </div>
         </aside>

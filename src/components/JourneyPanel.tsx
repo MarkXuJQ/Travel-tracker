@@ -14,6 +14,7 @@ import TransportModeIcon from './TransportModeIcon';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  publicMode?: boolean;
   passengerName: string;
   journeys: Journey[];
   activeRecordId: string;
@@ -207,6 +208,7 @@ function compareJourneysByOldest(left: Journey, right: Journey) {
 export default function JourneyPanel({
   isOpen,
   onClose,
+  publicMode = false,
   passengerName,
   journeys,
   activeRecordId,
@@ -258,6 +260,7 @@ export default function JourneyPanel({
     }))),
     [sortedJourneys],
   );
+  const showTimelineMode = !publicMode && viewMode === 'timeline';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -284,27 +287,29 @@ export default function JourneyPanel({
           </div>
 
           <div className="flex items-start gap-3">
-            <div className="inline-flex rounded-full border border-stone-200/90 bg-white/80 p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.28)]">
-              {VIEW_OPTIONS.map(option => {
-                const selected = option.key === viewMode;
+            {!publicMode && (
+              <div className="inline-flex rounded-full border border-stone-200/90 bg-white/80 p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.28)]">
+                {VIEW_OPTIONS.map(option => {
+                  const selected = option.key === viewMode;
 
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    className={`rounded-full px-4 py-2 text-sm transition ${
-                      selected
-                        ? 'bg-stone-900 text-white'
-                        : 'text-stone-500 hover:text-stone-900'
-                    }`}
-                    onClick={() => setViewMode(option.key)}
-                    aria-pressed={selected}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`rounded-full px-4 py-2 text-sm transition ${
+                        selected
+                          ? 'bg-stone-900 text-white'
+                          : 'text-stone-500 hover:text-stone-900'
+                      }`}
+                      onClick={() => setViewMode(option.key)}
+                      aria-pressed={selected}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <button
               type="button"
@@ -342,7 +347,7 @@ export default function JourneyPanel({
                 </div>
               )}
 
-              {viewMode === 'timeline' && (
+              {showTimelineMode && (
                 <HistoricalArchiveControls
                   activeRecordId={activeRecordId}
                   activeRecordKind={activeRecordKind}
@@ -376,7 +381,7 @@ export default function JourneyPanel({
                     </div>
                   )
                 ) : (
-                  viewMode === 'timeline' ? (
+                  showTimelineMode ? (
                     <JourneyTimeline
                       entries={timelineEntries}
                       selectedJourneyId={selectedJourneyId}
@@ -392,6 +397,7 @@ export default function JourneyPanel({
                           entryNumber={entryNumberById.get(journey.id) ?? index + 1}
                           recordKind={activeRecordKind}
                           passengerName={passengerName}
+                          readOnly={publicMode}
                           onDelete={deleteJourney}
                           onEdit={() => onEditJourney(journey)}
                           editing={journey.id === editingJourneyId}
@@ -798,6 +804,7 @@ function MinimalArchiveJourneyCard({
   selected,
   editing,
   label,
+  readOnly = false,
   onSelect,
   onEdit,
   onDelete,
@@ -808,6 +815,7 @@ function MinimalArchiveJourneyCard({
   selected: boolean;
   editing: boolean;
   label: string;
+  readOnly?: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: (id: string) => void;
@@ -861,40 +869,46 @@ function MinimalArchiveJourneyCard({
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <JourneyLinkButton
-              url={journey.url}
-              className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
-            />
+          {(journey.url || !readOnly) && (
+            <div className="flex shrink-0 items-center gap-2">
+              <JourneyLinkButton
+                url={journey.url}
+                className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
+              />
 
-            <button
-              type="button"
-              title="修改旅程"
-              className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
-              onClick={event => {
-                event.stopPropagation();
-                onEdit();
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-              </svg>
-            </button>
+              {!readOnly && (
+                <>
+                  <button
+                    type="button"
+                    title="修改旅程"
+                    className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
+                    onClick={event => {
+                      event.stopPropagation();
+                      onEdit();
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                    </svg>
+                  </button>
 
-            <button
-              type="button"
-              title="删除旅程"
-              className={`${actionButtonClassName} hover:text-red-500`}
-              onClick={event => {
-                event.stopPropagation();
-                onDelete(journey.id);
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
+                  <button
+                    type="button"
+                    title="删除旅程"
+                    className={`${actionButtonClassName} hover:text-red-500`}
+                    onClick={event => {
+                      event.stopPropagation();
+                      onDelete(journey.id);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
       </div>
@@ -910,6 +924,7 @@ function JourneyCard({
   entryNumber,
   recordKind,
   passengerName,
+  readOnly = false,
   onDelete,
   onEdit,
   editing,
@@ -921,6 +936,7 @@ function JourneyCard({
   entryNumber: number;
   recordKind: JourneyRecordKind;
   passengerName: string;
+  readOnly?: boolean;
   onDelete: (id: string) => void;
   onEdit: () => void;
   editing: boolean;
@@ -977,6 +993,7 @@ function JourneyCard({
         selected={selected}
         editing={editing}
         label={isHistoricalRecord ? 'Historical Route' : 'Journey Record'}
+        readOnly={readOnly}
         onSelect={onSelect}
         onEdit={onEdit}
         onDelete={onDelete}
@@ -1036,40 +1053,46 @@ function JourneyCard({
                 <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <JourneyLinkButton
-                  url={journey.url}
-                  className={`${actionButtonClassName} hover:text-stone-700`}
-                />
+              {(journey.url || !readOnly) && (
+                <div className="flex items-center gap-2">
+                  <JourneyLinkButton
+                    url={journey.url}
+                    className={`${actionButtonClassName} hover:text-stone-700`}
+                  />
 
-                <button
-                  type="button"
-                  title="修改旅程"
-                  className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
-                  onClick={event => {
-                    event.stopPropagation();
-                    onEdit();
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-                  </svg>
-                </button>
+                  {!readOnly && (
+                    <>
+                      <button
+                        type="button"
+                        title="修改旅程"
+                        className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
+                        onClick={event => {
+                          event.stopPropagation();
+                          onEdit();
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                        </svg>
+                      </button>
 
-                <button
-                  type="button"
-                  title="删除旅程"
-                  className={`${actionButtonClassName} hover:text-red-500`}
-                  onClick={event => {
-                    event.stopPropagation();
-                    onDelete(journey.id);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
+                      <button
+                        type="button"
+                        title="删除旅程"
+                        className={`${actionButtonClassName} hover:text-red-500`}
+                        onClick={event => {
+                          event.stopPropagation();
+                          onDelete(journey.id);
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1211,40 +1234,46 @@ function JourneyCard({
                       <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <JourneyLinkButton
-                        url={journey.url}
-                        className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
-                      />
+                    {(journey.url || !readOnly) && (
+                      <div className="flex items-center gap-2">
+                        <JourneyLinkButton
+                          url={journey.url}
+                          className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
+                        />
 
-                      <button
-                        type="button"
-                        title="修改旅程"
-                        className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
-                        onClick={event => {
-                          event.stopPropagation();
-                          onEdit();
-                        }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-                        </svg>
-                      </button>
+                        {!readOnly && (
+                          <>
+                            <button
+                              type="button"
+                              title="修改旅程"
+                              className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
+                              onClick={event => {
+                                event.stopPropagation();
+                                onEdit();
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                              </svg>
+                            </button>
 
-                      <button
-                        type="button"
-                        title="删除旅程"
-                        className={`${actionButtonClassName} hover:text-red-500`}
-                        onClick={event => {
-                          event.stopPropagation();
-                          onDelete(journey.id);
-                        }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
+                            <button
+                              type="button"
+                              title="删除旅程"
+                              className={`${actionButtonClassName} hover:text-red-500`}
+                              onClick={event => {
+                                event.stopPropagation();
+                                onDelete(journey.id);
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1310,48 +1339,54 @@ function JourneyCard({
                 </div>
               </div>
 
-              <div className="relative flex flex-col items-center gap-2">
-                <JourneyLinkButton
-                  url={journey.url}
-                  className={`${actionButtonClassName} ${
-                    editing
-                      ? 'border-stone-300 bg-white/90 text-stone-700'
-                      : 'hover:text-stone-700'
-                  }`}
-                />
+              {(journey.url || !readOnly) && (
+                <div className="relative flex flex-col items-center gap-2">
+                  <JourneyLinkButton
+                    url={journey.url}
+                    className={`${actionButtonClassName} ${
+                      editing
+                        ? 'border-stone-300 bg-white/90 text-stone-700'
+                        : 'hover:text-stone-700'
+                    }`}
+                  />
 
-                <button
-                  type="button"
-                  title="删除旅程"
-                  className={`${actionButtonClassName} hover:text-red-500`}
-                  onClick={event => {
-                    event.stopPropagation();
-                    onDelete(journey.id);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                  {!readOnly && (
+                    <>
+                      <button
+                        type="button"
+                        title="删除旅程"
+                        className={`${actionButtonClassName} hover:text-red-500`}
+                        onClick={event => {
+                          event.stopPropagation();
+                          onDelete(journey.id);
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
 
-                <button
-                  type="button"
-                  title="修改旅程"
-                  className={`${actionButtonClassName} ${
-                    editing
-                      ? 'border-stone-300 bg-white/90 text-stone-700'
-                      : 'hover:text-stone-700'
-                  }`}
-                  onClick={event => {
-                    event.stopPropagation();
-                    onEdit();
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-                  </svg>
-                </button>
-              </div>
+                      <button
+                        type="button"
+                        title="修改旅程"
+                        className={`${actionButtonClassName} ${
+                          editing
+                            ? 'border-stone-300 bg-white/90 text-stone-700'
+                            : 'hover:text-stone-700'
+                        }`}
+                        onClick={event => {
+                          event.stopPropagation();
+                          onEdit();
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div className="relative text-center">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Passenger</p>
