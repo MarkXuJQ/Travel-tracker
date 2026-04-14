@@ -207,26 +207,64 @@ function normalizeRecord(record: UserJourneyRecord, kind: JourneyRecordKind): Us
   };
 }
 
+function mergePresetHistoricalRecord(presetRecord: UserJourneyRecord, existingRecord: UserJourneyRecord | null) {
+  const normalizedPresetRecord = normalizeRecord(presetRecord, 'historical');
+
+  if (!existingRecord) {
+    return normalizedPresetRecord;
+  }
+
+  const presetJourneyIds = new Set(normalizedPresetRecord.journeys.map(journey => journey.id));
+  const existingJourneysById = new Map(existingRecord.journeys.map(journey => [journey.id, journey]));
+  const mergedJourneys = [
+    ...normalizedPresetRecord.journeys.map(journey => {
+      const existingJourney = existingJourneysById.get(journey.id);
+
+      return existingJourney
+        ? cloneJourney({
+            ...existingJourney,
+            ...journey,
+          })
+        : cloneJourney(journey);
+    }),
+    ...existingRecord.journeys
+      .filter(journey => !presetJourneyIds.has(journey.id))
+      .map(cloneJourney),
+  ];
+
+  return normalizeRecord({
+    ...existingRecord,
+    ...normalizedPresetRecord,
+    userId: normalizedPresetRecord.userId,
+    userName: normalizedPresetRecord.userName,
+    description: normalizedPresetRecord.description || existingRecord.description,
+    journeys: mergedJourneys,
+  }, 'historical');
+}
+
 function normalizeLibraryState(library: JourneyLibraryState): JourneyLibraryState {
   const personalRecord = normalizeRecord(library.personalRecord, 'personal');
   const usedIds = new Set<string>([personalRecord.userId]);
-  const existingHistoricalRecords = library.historicalRecords
+  const rawHistoricalRecords = library.historicalRecords
     .filter(isUserJourneyRecord)
-    .map(record => normalizeRecord(record, 'historical'))
-    .map(record => {
-      const nextId = createHistoricalRecordId(record.userName, usedIds, record.userId);
-      usedIds.add(nextId);
+    .map(record => normalizeRecord(record, 'historical'));
+  const presetHistoricalRecords = FAMOUS_JOURNEY_PRESETS.map(presetRecord => {
+    const existingRecord = rawHistoricalRecords.find(record =>
+      record.userId === presetRecord.userId || record.userName === presetRecord.userName,
+    ) ?? null;
+    const mergedRecord = mergePresetHistoricalRecord(presetRecord, existingRecord);
+    const nextId = createHistoricalRecordId(mergedRecord.userName, usedIds, presetRecord.userId);
+    usedIds.add(nextId);
 
-      return {
-        ...record,
-        userId: nextId,
-        kind: 'historical' as const,
-      };
-    });
-  const defaultHistoricalRecords = FAMOUS_JOURNEY_PRESETS
-    .map(record => normalizeRecord(record, 'historical'))
-    .filter(record => !existingHistoricalRecords.some(existingRecord =>
-      existingRecord.userId === record.userId || existingRecord.userName === record.userName,
+    return {
+      ...mergedRecord,
+      userId: nextId,
+      kind: 'historical' as const,
+    };
+  });
+  const customHistoricalRecords = rawHistoricalRecords
+    .filter(record => !FAMOUS_JOURNEY_PRESETS.some(presetRecord =>
+      presetRecord.userId === record.userId || presetRecord.userName === record.userName,
     ))
     .map(record => {
       const nextId = createHistoricalRecordId(record.userName, usedIds, record.userId);
@@ -239,8 +277,8 @@ function normalizeLibraryState(library: JourneyLibraryState): JourneyLibraryStat
       };
     });
   const historicalRecords = [
-    ...defaultHistoricalRecords,
-    ...existingHistoricalRecords,
+    ...presetHistoricalRecords,
+    ...customHistoricalRecords,
   ];
   const allRecordIds = new Set([personalRecord.userId, ...historicalRecords.map(record => record.userId)]);
   const activeRecordId = allRecordIds.has(library.activeRecordId) ? library.activeRecordId : personalRecord.userId;

@@ -1,0 +1,66 @@
+{
+  "userId": "mao-zedong",
+  "userName": "毛泽东",
+  "kind": "historical",
+  "description": "从湖南出发，辗转长沙、北京、上海、广州、延安与苏联的重要革命行程。",
+  "birthplace": null,
+  "passengerName": "",
+  "journeys": [
+    {
+      "id": "mao-zedong-1911-xiangtan",
+      "title": "湘中启程",
+      "date": "1911",
+      "locations": [
+        { "type": "city", "name": "湘潭市", "label": "湘潭" }
+      ]
+    },
+    {
+      "id": "mao-zedong-1913-changsha",
+      "title": "求学长沙",
+      "date": "1913",
+      "locations": [
+        { "type": "city", "name": "长沙市", "label": "长沙" }
+      ]
+    },
+    {
+      "id": "mao-zedong-1918-beijing",
+      "title": "初到北京",
+      "date": "1918",
+      "locations": [
+        { "type": "city", "name": "北京市", "label": "北京" }
+      ]
+    },
+    {
+      "id": "mao-zedong-1921-shanghai",
+      "title": "上海建党时期",
+      "date": "1921",
+      "locations": [
+        { "type": "city", "name": "上海市", "label": "上海" }
+      ]
+    },
+    {
+      "id": "mao-zedong-1924-guangzhou",
+      "title": "广州活动",
+      "date": "1924",
+      "locations": [
+        { "type": "city", "name": "广州市", "label": "广州" }
+      ]
+    },
+    {
+      "id": "mao-zedong-1935-yanan",
+      "title": "转赴延安",
+      "date": "1935",
+      "locations": [
+        { "type": "city", "name": "延安市", "label": "延安" }
+      ]
+    },
+    {
+      "id": "mao-zedong-1949-russia",
+      "title": "访问苏联",
+      "date": "1949",
+      "locations": [
+        { "type": "country", "name": "Russia", "label": "俄罗斯" }
+      ]
+    }
+  ]
+}

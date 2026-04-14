@@ -1,0 +1,58 @@
+{
+  "userId": "marco-polo",
+  "userName": "马可波罗",
+  "kind": "historical",
+  "description": "从威尼斯出发，经土耳其、伊朗进入中国，又最终返回威尼斯的欧亚游历者。",
+  "birthplace": null,
+  "passengerName": "",
+  "journeys": [
+    {
+      "id": "marco-polo-1271-italy",
+      "title": "离开威尼斯",
+      "date": "1271",
+      "locations": [
+        { "type": "country", "name": "Italy", "label": "意大利" }
+      ]
+    },
+    {
+      "id": "marco-polo-1272-turkey",
+      "title": "东地中海",
+      "date": "1272",
+      "locations": [
+        { "type": "country", "name": "Turkey", "label": "土耳其" }
+      ]
+    },
+    {
+      "id": "marco-polo-1273-iran",
+      "title": "波斯高原",
+      "date": "1273",
+      "locations": [
+        { "type": "country", "name": "Iran", "label": "伊朗" }
+      ]
+    },
+    {
+      "id": "marco-polo-1275-china",
+      "title": "抵达东方",
+      "date": "1275",
+      "locations": [
+        { "type": "country", "name": "China", "label": "中国" }
+      ]
+    },
+    {
+      "id": "marco-polo-1276-beijing",
+      "title": "入见汗廷",
+      "date": "1276",
+      "locations": [
+        { "type": "city", "name": "北京市", "label": "北京" }
+      ]
+    },
+    {
+      "id": "marco-polo-1295-italy",
+      "title": "归返故里",
+      "date": "1295",
+      "locations": [
+        { "type": "country", "name": "Italy", "label": "意大利" }
+      ]
+    }
+  ]
+}

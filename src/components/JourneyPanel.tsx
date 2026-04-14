@@ -68,6 +68,10 @@ interface JourneyArchiveOption {
   journeyCount: number;
 }
 
+function joinLocationLabels(locations: JourneyLocation[]) {
+  return locations.map(location => location.label).join(' · ');
+}
+
 const VIEW_OPTIONS: Array<{ key: JourneyPanelViewMode; label: string }> = [
   { key: 'list', label: '列表' },
   { key: 'timeline', label: '时间线' },
@@ -365,6 +369,7 @@ export default function JourneyPanel({
                           journey={journey}
                           index={index}
                           entryNumber={entryNumberById.get(journey.id) ?? index + 1}
+                          recordKind={activeRecordKind}
                           passengerName={passengerName}
                           onDelete={deleteJourney}
                           onEdit={() => onEditJourney(journey)}
@@ -767,6 +772,7 @@ function JourneyCard({
   journey,
   index,
   entryNumber,
+  recordKind,
   passengerName,
   onDelete,
   onEdit,
@@ -777,6 +783,7 @@ function JourneyCard({
   journey: Journey;
   index: number;
   entryNumber: number;
+  recordKind: JourneyRecordKind;
   passengerName: string;
   onDelete: (id: string) => void;
   onEdit: () => void;
@@ -798,6 +805,8 @@ function JourneyCard({
   const formattedJourneyDate = journey.date ? formatJourneyDate(journey.date) : '--.--.--';
   const displayPassengerName = passengerName.trim() || '未设置';
   const entryLabel = `Entry ${String(entryNumber).padStart(2, '0')}`;
+  const isHistoricalRecord = recordKind === 'historical';
+  const locationSummary = joinLocationLabels(journey.locations);
   const articleClassName = isFlightTicket
     ? editing
       ? 'border-[#dcbf82] shadow-[0_28px_56px_-40px_rgba(217,119,6,0.3)]'
@@ -819,6 +828,93 @@ function JourneyCard({
   const stubPaddingClassName = isFlightTicket ? 'px-3 pb-4 pt-[4.35rem]' : 'px-3 pb-10 pt-4';
   const ticketGridClassName = isFlightTicket ? 'grid grid-cols-[minmax(0,1fr)_5.75rem]' : 'grid grid-cols-1';
   const actionButtonClassName = 'flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-stone-400 transition hover:border-white/80 hover:bg-white/82';
+
+  if (isHistoricalRecord) {
+    return (
+      <article
+        role="button"
+        tabIndex={0}
+        aria-pressed={selected}
+        className={`group relative overflow-hidden rounded-[26px] border text-left outline-none transition ${
+          editing
+            ? 'border-stone-300 shadow-[0_24px_50px_-38px_rgba(15,23,42,0.18)]'
+            : selected
+              ? 'border-stone-300 shadow-[0_24px_50px_-38px_rgba(15,23,42,0.14)]'
+              : 'border-stone-200/90 hover:border-stone-300'
+        }`}
+        onClick={onSelect}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
+      >
+        <div className="absolute inset-0 bg-[#fbf8f2]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,rgba(120,113,108,0)_0%,rgba(120,113,108,0.24)_18%,rgba(120,113,108,0.24)_82%,rgba(120,113,108,0)_100%)]" />
+
+        <div className="relative px-5 py-5 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-stone-500">Historical Route</p>
+              <h4 className="font-editorial mt-3 text-[1.35rem] leading-snug text-stone-900">
+                {journey.title}
+              </h4>
+            </div>
+
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
+              <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-start justify-between gap-4 border-t border-dashed border-stone-200/90 pt-4">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-stone-400">Region</p>
+              <p className="mt-2 text-sm leading-7 text-stone-700">
+                {locationSummary || '未记录地区'}
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <JourneyLinkButton
+                url={journey.url}
+                className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
+              />
+
+              <button
+                type="button"
+                title="修改旅程"
+                className={`${actionButtonClassName} ${editing ? 'border-stone-300 bg-white/90 text-stone-700' : 'hover:text-stone-700'}`}
+                onClick={event => {
+                  event.stopPropagation();
+                  onEdit();
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                title="删除旅程"
+                className={`${actionButtonClassName} hover:text-red-500`}
+                onClick={event => {
+                  event.stopPropagation();
+                  onDelete(journey.id);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   if (usesLedgerLayout) {
     return (

@@ -1,0 +1,58 @@
+{
+  "userId": "xu-xiake",
+  "userName": "徐霞客",
+  "kind": "historical",
+  "description": "明代旅行家与地理学者，足迹跨越东南、齐鲁与西南山川。",
+  "birthplace": null,
+  "passengerName": "",
+  "journeys": [
+    {
+      "id": "xu-xiake-1613-ningbo",
+      "title": "山海初游",
+      "date": "1613",
+      "locations": [
+        { "type": "city", "name": "宁波市", "label": "宁波" }
+      ]
+    },
+    {
+      "id": "xu-xiake-1616-huangshan",
+      "title": "黄山问峰",
+      "date": "1616",
+      "locations": [
+        { "type": "city", "name": "黄山市", "label": "黄山" }
+      ]
+    },
+    {
+      "id": "xu-xiake-1618-taian",
+      "title": "登临泰山",
+      "date": "1618",
+      "locations": [
+        { "type": "city", "name": "泰安市", "label": "泰安" }
+      ]
+    },
+    {
+      "id": "xu-xiake-1632-guilin",
+      "title": "桂林山水",
+      "date": "1632",
+      "locations": [
+        { "type": "city", "name": "桂林市", "label": "桂林" }
+      ]
+    },
+    {
+      "id": "xu-xiake-1639-baoshan",
+      "title": "踏入滇西",
+      "date": "1639",
+      "locations": [
+        { "type": "city", "name": "保山市", "label": "保山" }
+      ]
+    },
+    {
+      "id": "xu-xiake-1639-lijiang",
+      "title": "西南边地",
+      "date": "1639",
+      "locations": [
+        { "type": "city", "name": "丽江市", "label": "丽江" }
+      ]
+    }
+  ]
+}
