@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
 import { filterJourneysByRecordFilter } from '../utils/journeyRecordFilter';
@@ -33,6 +33,24 @@ const TYPE_DOT: Record<JourneyLocation['type'], string> = {
 };
 
 const TRAIN_TICKET_ID = '370306 20260203 XXXX';
+const JOURNEY_PANEL_VIEW_STORAGE_KEY = 'travel-tracker-journey-panel-view';
+
+type JourneyPanelViewMode = 'list' | 'timeline';
+
+interface JourneyTimelineEntry {
+  key: string;
+  journey: Journey;
+  location: JourneyLocation;
+}
+
+const VIEW_OPTIONS: Array<{ key: JourneyPanelViewMode; label: string }> = [
+  { key: 'list', label: '列表' },
+  { key: 'timeline', label: '时间线' },
+];
+
+function isJourneyPanelViewMode(value: string | null): value is JourneyPanelViewMode {
+  return value === 'list' || value === 'timeline';
+}
 
 function getJourneyTransportMode(journey: Journey): JourneyTransportMode {
   if (journey.transportMode) {
@@ -73,6 +91,26 @@ function getFlightStubLabel(index: number) {
     title: 'Gate',
     value: String((index % 8) + 1).padStart(2, '0'),
   };
+}
+
+function getTimelineLocations(journey: Journey) {
+  const transportMode = getJourneyTransportMode(journey);
+
+  if (transportMode !== 'default') {
+    const destination = journey.destination
+      ?? journey.locations[journey.locations.length - 1]
+      ?? journey.departure
+      ?? null;
+
+    return destination ? [destination] : [];
+  }
+
+  if (journey.locations.length > 0) {
+    return journey.locations;
+  }
+
+  const fallbackLocation = journey.destination ?? journey.departure ?? null;
+  return fallbackLocation ? [fallbackLocation] : [];
 }
 
 function getJourneyTimestamp(journey: Journey) {
@@ -132,6 +170,12 @@ export default function JourneyPanel({
   onEditJourney,
   onClearFilter,
 }: Props) {
+  const [viewMode, setViewMode] = useState<JourneyPanelViewMode>(() => {
+    if (typeof window === 'undefined') return 'list';
+
+    const savedViewMode = window.localStorage.getItem(JOURNEY_PANEL_VIEW_STORAGE_KEY);
+    return isJourneyPanelViewMode(savedViewMode) ? savedViewMode : 'list';
+  });
   const visibleJourneys = useMemo(
     () => filterJourneysByRecordFilter(journeys, activeFilter),
     [activeFilter, journeys],
@@ -148,6 +192,19 @@ export default function JourneyPanel({
     ),
     [journeys],
   );
+  const timelineEntries = useMemo<JourneyTimelineEntry[]>(
+    () => sortedJourneys.flatMap(journey => getTimelineLocations(journey).map((location, locationIndex) => ({
+      key: `${journey.id}-${location.type}-${location.name}-${locationIndex}`,
+      journey,
+      location,
+    }))),
+    [sortedJourneys],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(JOURNEY_PANEL_VIEW_STORAGE_KEY, viewMode);
+  }, [viewMode]);
 
   if (!isOpen) return null;
 
@@ -164,33 +221,52 @@ export default function JourneyPanel({
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.6)_0%,rgba(255,255,255,0)_18%,rgba(255,255,255,0)_100%)]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0)_36%)]" />
 
-        <div className="relative flex items-start justify-between border-b border-stone-200/80 px-6 py-5">
+        <div className="relative flex items-start justify-between gap-4 border-b border-stone-200/80 px-6 py-5">
           <div className="max-w-sm">
             <p className="text-[10px] uppercase tracking-[0.36em] text-stone-500">Archive</p>
             <h2 className="font-editorial mt-3 text-[2rem] leading-none text-stone-900">旅程档案</h2>
           </div>
 
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-200/80 bg-white/80 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
-            onClick={onClose}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-start gap-3">
+            <div className="inline-flex rounded-full border border-stone-200/90 bg-white/80 p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.28)]">
+              {VIEW_OPTIONS.map(option => {
+                const selected = option.key === viewMode;
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-sm transition ${
+                      selected
+                        ? 'bg-stone-900 text-white'
+                        : 'text-stone-500 hover:text-stone-900'
+                    }`}
+                    onClick={() => setViewMode(option.key)}
+                    aria-pressed={selected}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-200/80 bg-white/80 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+              onClick={onClose}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="relative flex-1 overflow-y-auto">
           <div className="space-y-7 px-6 py-5">
             <section className="pb-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Archive</p>
-                <h3 className="font-editorial mt-2 text-[1.65rem] leading-none text-stone-900">旅程列表</h3>
-              </div>
-
               {activeFilter && (
-                <div className="mt-4 flex items-center justify-between gap-4 rounded-[22px] border border-stone-200/90 bg-white/68 px-4 py-3">
+                <div className="flex items-center justify-between gap-4 rounded-[22px] border border-stone-200/90 bg-white/68 px-4 py-3">
                   <div className="min-w-0">
                     <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Location Filter</p>
                     <p className="mt-1 truncate text-sm text-stone-800">
@@ -210,7 +286,7 @@ export default function JourneyPanel({
                 </div>
               )}
 
-              <div className="mt-5">
+              <div className={`${activeFilter ? 'mt-4' : 'mt-5'}`}>
                 {sortedJourneys.length === 0 ? (
                   activeFilter ? (
                     <div className="bg-[#fcf8f1] px-5 py-10 text-center">
@@ -229,22 +305,30 @@ export default function JourneyPanel({
                     </div>
                   )
                 ) : (
-                  <div className="space-y-3">
-                    {sortedJourneys.map((journey, index) => (
-                      <JourneyCard
-                        key={journey.id}
-                        journey={journey}
-                        index={index}
-                        entryNumber={entryNumberById.get(journey.id) ?? index + 1}
-                        passengerName={passengerName}
-                        onDelete={deleteJourney}
-                        onEdit={() => onEditJourney(journey)}
-                        editing={journey.id === editingJourneyId}
-                        selected={journey.id === selectedJourneyId}
-                        onSelect={() => onSelectJourney(journey.id)}
-                      />
-                    ))}
-                  </div>
+                  viewMode === 'timeline' ? (
+                    <JourneyTimeline
+                      entries={timelineEntries}
+                      selectedJourneyId={selectedJourneyId}
+                      onSelectJourney={onSelectJourney}
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {sortedJourneys.map((journey, index) => (
+                        <JourneyCard
+                          key={journey.id}
+                          journey={journey}
+                          index={index}
+                          entryNumber={entryNumberById.get(journey.id) ?? index + 1}
+                          passengerName={passengerName}
+                          onDelete={deleteJourney}
+                          onEdit={() => onEditJourney(journey)}
+                          editing={journey.id === editingJourneyId}
+                          selected={journey.id === selectedJourneyId}
+                          onSelect={() => onSelectJourney(journey.id)}
+                        />
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             </section>
@@ -267,6 +351,92 @@ export default function JourneyPanel({
         </div>
       </aside>
     </>
+  );
+}
+
+function JourneyTimeline({
+  entries,
+  selectedJourneyId,
+  onSelectJourney,
+}: {
+  entries: JourneyTimelineEntry[];
+  selectedJourneyId: string | null;
+  onSelectJourney: (id: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute bottom-3 left-[5.8rem] top-3 w-px bg-stone-200/90" />
+
+      <ol className="relative">
+        {entries.map((entry, index) => {
+          const selected = entry.journey.id === selectedJourneyId;
+          const dateLabel = entry.journey.date ? formatJourneyDate(entry.journey.date) : '--';
+
+          return (
+            <li key={entry.key}>
+              <button
+                type="button"
+                className="group grid w-full grid-cols-[4.75rem_1.5rem_minmax(0,1fr)] items-start gap-3 text-left"
+                onClick={() => onSelectJourney(entry.journey.id)}
+              >
+                <span className={`pt-3 font-tabular text-[11px] tracking-[0.16em] ${
+                  selected ? 'text-stone-900' : 'text-stone-500'
+                }`}>
+                  {dateLabel}
+                </span>
+
+                <span className="relative flex justify-center pt-[1rem]">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full border transition ${
+                      selected
+                        ? 'border-stone-900 bg-stone-900'
+                        : 'border-stone-300 bg-[#f6f1e8] group-hover:border-stone-500 group-hover:bg-stone-500'
+                    }`}
+                  />
+                </span>
+
+                <span className={`min-w-0 border-b border-dashed pb-4 pt-2.5 text-[1rem] leading-7 transition ${
+                  index === entries.length - 1 ? 'border-transparent' : ''
+                } ${
+                  selected
+                    ? 'border-stone-300 text-stone-900'
+                    : 'border-stone-200 text-stone-700 group-hover:border-stone-300 group-hover:text-stone-900'
+                }`}>
+                  {entry.location.label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function JourneyLinkButton({
+  url,
+  className,
+}: {
+  url?: string;
+  className: string;
+}) {
+  if (!url) return null;
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="打开链接"
+      aria-label="打开链接"
+      className={className}
+      onClick={event => event.stopPropagation()}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8.25 7.5H7.5A2.25 2.25 0 005.25 9.75v6.75A2.25 2.25 0 007.5 18.75h6.75a2.25 2.25 0 002.25-2.25v-.75" />
+      </svg>
+    </a>
   );
 }
 
@@ -380,6 +550,11 @@ function JourneyCard({
               </div>
 
               <div className="flex items-center gap-2">
+                <JourneyLinkButton
+                  url={journey.url}
+                  className={`${actionButtonClassName} hover:text-stone-700`}
+                />
+
                 <button
                   type="button"
                   title="修改旅程"
@@ -552,6 +727,11 @@ function JourneyCard({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <JourneyLinkButton
+                      url={journey.url}
+                      className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
+                    />
+
                     <button
                       type="button"
                       title="修改旅程"
@@ -652,6 +832,15 @@ function JourneyCard({
             </div>
 
             <div className="relative flex flex-col items-center gap-2">
+              <JourneyLinkButton
+                url={journey.url}
+                className={`${actionButtonClassName} ${
+                  editing
+                    ? 'border-stone-300 bg-white/90 text-stone-700'
+                    : 'hover:text-stone-700'
+                }`}
+              />
+
               <button
                 type="button"
                 title="删除旅程"
