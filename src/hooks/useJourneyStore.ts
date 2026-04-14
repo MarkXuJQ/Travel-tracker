@@ -343,6 +343,28 @@ function normalizeLibraryState(library: JourneyLibraryState): JourneyLibraryStat
   };
 }
 
+function createPersistedLibraryState(library: JourneyLibraryState): JourneyLibraryState {
+  const presetRecordIds = new Set(FAMOUS_JOURNEY_PRESETS.map(record => record.userId));
+  const presetRecordNames = new Set(FAMOUS_JOURNEY_PRESETS.map(record => record.userName));
+
+  return {
+    personalRecord: normalizeRecord(library.personalRecord, 'personal'),
+    historicalRecords: library.historicalRecords
+      .filter(record => (
+        record.source !== 'preset'
+        && !presetRecordIds.has(record.userId)
+        && !presetRecordNames.has(record.userName)
+      ))
+      .map(record => normalizeRecord({
+        ...record,
+        source: 'custom',
+      }, 'historical', 'custom')),
+    activeRecordId: library.activeRecordId,
+    dismissedPresetRecordIds: (library.dismissedPresetRecordIds ?? [])
+      .filter(recordId => presetRecordIds.has(recordId)),
+  };
+}
+
 function migrateLegacyArchive(archive: LegacyJourneyArchive): JourneyLibraryState {
   const selectedTraveler = archive.travelers.find(traveler => traveler.id === archive.selectedTravelerId) ?? archive.travelers[0];
   const personalRecord = normalizeRecord({
@@ -428,9 +450,9 @@ function loadLibraryFromStorage(): JourneyLibraryState {
       }
     }
 
-    return seedLibrary;
+    return normalizeLibraryState(seedLibrary);
   } catch {
-    return seedLibrary;
+    return normalizeLibraryState(seedLibrary);
   }
 }
 
@@ -466,9 +488,16 @@ function buildHistoricalRecord(
 
 export function useJourneyStore() {
   const [library, setLibrary] = useState<JourneyLibraryState>(loadLibraryFromStorage);
+  const presetSignature = FAMOUS_JOURNEY_PRESETS
+    .map(record => `${record.userId}:${record.userName}:${record.journeys.length}`)
+    .join('|');
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+    setLibrary(current => normalizeLibraryState(current));
+  }, [presetSignature]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(createPersistedLibraryState(library)));
     localStorage.removeItem(LEGACY_RECORD_STORAGE_KEY);
     localStorage.removeItem(ARCHIVE_STORAGE_KEY);
   }, [library]);

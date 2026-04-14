@@ -2,57 +2,91 @@
   "userId": "xu-xiake",
   "userName": "徐霞客",
   "kind": "historical",
-  "description": "明代旅行家与地理学者，足迹跨越东南、齐鲁与西南山川。",
-  "birthplace": null,
+  "description": "明代地理学家、旅行家与文学家，三十余年徒步考察山川水脉，足迹遍及大半个中国，《徐霞客游记》由此而成。",
+  "birthplace": {
+    "type": "city",
+    "name": "无锡市",
+    "label": "江阴"
+  },
   "passengerName": "",
   "journeys": [
     {
-      "id": "xu-xiake-1613-ningbo",
-      "title": "山海初游",
-      "date": "1613",
+      "id": "xu-1587-jiangyin-birth",
+      "title": "江阴出生与早年立志",
+      "date": "1587",
       "locations": [
-        { "type": "city", "name": "宁波市", "label": "宁波" }
-      ]
+        { "type": "city", "name": "无锡市", "label": "江阴" }
+      ],
+      "description": "生于南直隶江阴书香门第，自幼喜读史地与游记，无意科举，早早立下问奇天下的志向。"
     },
     {
-      "id": "xu-xiake-1616-huangshan",
-      "title": "黄山问峰",
-      "date": "1616",
+      "id": "xu-1607-1618-early-roaming",
+      "title": "早期壮游",
+      "date": "1607-1618",
       "locations": [
-        { "type": "city", "name": "黄山市", "label": "黄山" }
-      ]
+        { "type": "city", "name": "苏州市", "label": "太湖" },
+        { "type": "city", "name": "宁波市", "label": "宁波" },
+        { "type": "city", "name": "舟山市", "label": "普陀山" },
+        { "type": "city", "name": "泰安市", "label": "泰山" }
+      ],
+      "description": "婚后在母亲鼓励下开始远游，先后泛太湖、访海上名山、登泰山，逐步从短途探访转向有意识的实地考察。"
     },
     {
-      "id": "xu-xiake-1618-taian",
-      "title": "登临泰山",
-      "date": "1618",
+      "id": "xu-1616-1631-east-mountains",
+      "title": "系统考察东南名山",
+      "date": "1616-1631",
       "locations": [
-        { "type": "city", "name": "泰安市", "label": "泰安" }
-      ]
+        { "type": "city", "name": "黄山市", "label": "黄山" },
+        { "type": "city", "name": "台州市", "label": "天台山" },
+        { "type": "city", "name": "温州市", "label": "雁荡山" },
+        { "type": "city", "name": "南平市", "label": "武夷山" }
+      ],
+      "description": "逐渐形成系统性的考察方法，重视亲历、测记与辨伪，对山势、水源与路径均作细致记录。"
     },
     {
-      "id": "xu-xiake-1632-guilin",
-      "title": "桂林山水",
-      "date": "1632",
+      "id": "xu-1632-1634-central-mountains",
+      "title": "遍访华中与西北名山",
+      "date": "1632-1634",
       "locations": [
-        { "type": "city", "name": "桂林市", "label": "桂林" }
-      ]
+        { "type": "city", "name": "九江市", "label": "庐山" },
+        { "type": "city", "name": "洛阳市", "label": "嵩山" },
+        { "type": "city", "name": "渭南市", "label": "华山" },
+        { "type": "city", "name": "十堰市", "label": "武当山" }
+      ],
+      "description": "继续北上与西行，考察庐山、嵩山、华山、武当等名山，对山脉走向、江河源流与溶洞地貌多有独到观察。"
     },
     {
-      "id": "xu-xiake-1639-baoshan",
-      "title": "踏入滇西",
-      "date": "1639",
+      "id": "xu-1636-1638-southwest-expedition",
+      "title": "万里遐征入西南",
+      "date": "1636-1638",
       "locations": [
-        { "type": "city", "name": "保山市", "label": "保山" }
-      ]
+        { "type": "city", "name": "桂林市", "label": "桂林" },
+        { "type": "city", "name": "柳州市", "label": "柳州" },
+        { "type": "city", "name": "贵阳市", "label": "贵阳" },
+        { "type": "city", "name": "安顺市", "label": "安顺" },
+        { "type": "city", "name": "昆明市", "label": "昆明" }
+      ],
+      "description": "自江南启程深入西南，经江西、湖南、广西、贵州入滇，集中考察桂林喀斯特地貌、盘江流域水系与沿途山川形胜。"
     },
     {
-      "id": "xu-xiake-1639-lijiang",
-      "title": "西南边地",
-      "date": "1639",
+      "id": "xu-1639-1640-yunnan-frontier",
+      "title": "深入滇西边疆",
+      "date": "1639-1640",
       "locations": [
+        { "type": "city", "name": "保山市", "label": "腾越" },
         { "type": "city", "name": "丽江市", "label": "丽江" }
-      ]
+      ],
+      "description": "到达滇西腾越一带考察火山与地热，又在丽江受到木增礼遇。期间身染重病、双足俱废，仍坚持整理见闻与著述。"
+    },
+    {
+      "id": "xu-1640-1641-return-home",
+      "title": "东归与辞世",
+      "date": "1640-1641",
+      "locations": [
+        { "type": "city", "name": "黄冈市", "label": "黄冈" },
+        { "type": "city", "name": "无锡市", "label": "江阴" }
+      ],
+      "description": "病重后由丽江方面护送东归，经湖北黄冈乘船返乡，次年病逝于江阴，手稿后经友人整理为《徐霞客游记》。"
     }
   ]
 }

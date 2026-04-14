@@ -1,58 +1,92 @@
 {
   "userId": "marco-polo",
-  "userName": "马可波罗",
+  "userName": "马可·波罗",
   "kind": "historical",
-  "description": "从威尼斯出发，经土耳其、伊朗进入中国，又最终返回威尼斯的欧亚游历者。",
+  "description": "13世纪威尼斯商人、旅行家，随父与叔父沿陆上丝绸之路东抵元朝，又自泉州经海路返欧，《马可·波罗游记》由此深刻改变了欧洲对东方的认识。",
   "birthplace": null,
   "passengerName": "",
   "journeys": [
     {
-      "id": "marco-polo-1271-italy",
-      "title": "离开威尼斯",
-      "date": "1271",
+      "id": "marco-1254-venice-birth",
+      "title": "威尼斯出生与商人家世",
+      "date": "1254",
       "locations": [
-        { "type": "country", "name": "Italy", "label": "意大利" }
-      ]
+        { "type": "country", "name": "Italy", "label": "威尼斯" }
+      ],
+      "description": "约生于威尼斯商人家庭。其父尼科洛、叔父马费奥长期往来欧亚，为他后来的东方远行奠定了家族背景。"
     },
     {
-      "id": "marco-polo-1272-turkey",
-      "title": "东地中海",
-      "date": "1272",
+      "id": "marco-1271-1272-eastward-departure",
+      "title": "随父东行",
+      "date": "1271-1272",
       "locations": [
-        { "type": "country", "name": "Turkey", "label": "土耳其" }
-      ]
+        { "type": "country", "name": "Italy", "label": "威尼斯" },
+        { "type": "country", "name": "Turkey", "label": "小亚细亚" },
+        { "type": "country", "name": "Iraq", "label": "两河流域" }
+      ],
+      "description": "17岁随父亲和叔叔启程离开威尼斯，经地中海东岸与西亚贸易通道向东方进发，开启漫长而艰险的旅程。"
     },
     {
-      "id": "marco-polo-1273-iran",
-      "title": "波斯高原",
-      "date": "1273",
+      "id": "marco-1272-1275-persia-central-asia",
+      "title": "穿越波斯与中亚",
+      "date": "1272-1275",
       "locations": [
-        { "type": "country", "name": "Iran", "label": "伊朗" }
-      ]
+        { "type": "country", "name": "Armenia", "label": "亚美尼亚" },
+        { "type": "country", "name": "Iran", "label": "波斯" },
+        { "type": "country", "name": "Mongolia", "label": "蒙古高原" }
+      ],
+      "description": "继续经外高加索、波斯与中亚腹地东行，翻越高原与荒漠地带，历时数年才抵达元朝统治核心区域。"
     },
     {
-      "id": "marco-polo-1275-china",
-      "title": "抵达东方",
+      "id": "marco-1275-shangdu-dadu",
+      "title": "抵达上都与大都",
       "date": "1275",
       "locations": [
-        { "type": "country", "name": "China", "label": "中国" }
-      ]
+        { "type": "city", "name": "锡林郭勒盟", "label": "上都" },
+        { "type": "city", "name": "北京市", "label": "大都" }
+      ],
+      "description": "抵达元上都后受到忽必烈接见，不久往返上都与大都之间，正式进入元廷视野。"
     },
     {
-      "id": "marco-polo-1276-beijing",
-      "title": "入见汗廷",
-      "date": "1276",
+      "id": "marco-1275-1291-yuan-service",
+      "title": "元廷供职与中国游历",
+      "date": "1275-1291",
       "locations": [
-        { "type": "city", "name": "北京市", "label": "北京" }
-      ]
+        { "type": "city", "name": "北京市", "label": "大都" },
+        { "type": "city", "name": "杭州市", "label": "杭州" },
+        { "type": "city", "name": "泉州市", "label": "泉州" }
+      ],
+      "description": "留居元朝十余年，书中详细记载大都的宏阔、杭州的繁华与泉州的海贸盛况，这些见闻后来成为欧洲理解东方的重要窗口。"
     },
     {
-      "id": "marco-polo-1295-italy",
-      "title": "归返故里",
-      "date": "1295",
+      "id": "marco-1291-1295-return-voyage",
+      "title": "护送公主西归",
+      "date": "1291-1295",
       "locations": [
-        { "type": "country", "name": "Italy", "label": "意大利" }
-      ]
+        { "type": "city", "name": "泉州市", "label": "泉州" },
+        { "type": "country", "name": "Iran", "label": "波斯" },
+        { "type": "country", "name": "Turkey", "label": "小亚细亚" },
+        { "type": "country", "name": "Italy", "label": "威尼斯" }
+      ],
+      "description": "受命由泉州护送蒙古公主阔阔真远嫁波斯伊儿汗国，完成使命后继续西行，于1295年回到阔别二十余年的威尼斯。"
+    },
+    {
+      "id": "marco-1298-1299-genoa-book",
+      "title": "热那亚被俘与狱中著述",
+      "date": "1298-1299",
+      "locations": [
+        { "type": "country", "name": "Italy", "label": "热那亚" }
+      ],
+      "description": "返乡后卷入威尼斯与热那亚的战争并被俘，在狱中向鲁斯蒂谦口述东方见闻，形成后世所称《马可·波罗游记》。"
+    },
+    {
+      "id": "marco-1299-1324-late-years",
+      "title": "晚年返乡与逝世",
+      "date": "1299-1324",
+      "locations": [
+        { "type": "country", "name": "Italy", "label": "威尼斯" }
+      ],
+      "description": "获释后回到威尼斯，结婚经商，晚年仍因其夸张的东方见闻而引发热议，1324年去世。"
     }
   ]
 }
