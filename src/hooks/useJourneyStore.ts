@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Journey, JourneyLocation, UserJourneyRecord } from '../types/journey';
+import type {
+  Journey,
+  JourneyLibraryState,
+  JourneyLocation,
+  JourneyRecordKind,
+  UserJourneyRecord,
+} from '../types/journey';
+import { FAMOUS_JOURNEY_PRESETS } from '../data/famousJourneyArchives';
 import { normalizeJourneyDate } from '../utils/journeyDate';
 
-const STORAGE_KEY = 'travel_globe_journeys';
+const STORAGE_KEY = 'travel_globe_journey_library';
+const LEGACY_RECORD_STORAGE_KEY = 'travel_globe_journeys';
 const ARCHIVE_STORAGE_KEY = 'travel_globe_archive';
 const DEFAULT_USER_RECORD: UserJourneyRecord = {
   userId: 'me',
   userName: '我',
+  kind: 'personal',
+  description: '',
   birthplace: null,
   passengerName: '',
   journeys: [],
@@ -62,18 +72,47 @@ function cloneJourney(journey: Journey): Journey {
   };
 }
 
-function cloneRecord(record: UserJourneyRecord): UserJourneyRecord {
+function isJourneyRecordKind(value: unknown): value is JourneyRecordKind {
+  return value === 'personal' || value === 'historical';
+}
+
+function createHistoricalRecordId(name: string, usedIds: Set<string>, preferredId?: string) {
+  const seed = (preferredId && preferredId !== DEFAULT_USER_RECORD.userId ? preferredId : name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  const baseId = seed || `historical-${Date.now()}`;
+
+  let nextId = baseId;
+  let counter = 2;
+  while (usedIds.has(nextId)) {
+    nextId = `${baseId}-${counter}`;
+    counter += 1;
+  }
+
+  return nextId;
+}
+
+function cloneRecord(record: UserJourneyRecord, fallbackKind: JourneyRecordKind = 'personal'): UserJourneyRecord {
+  const normalizedKind = record.kind === 'historical' || fallbackKind === 'historical' ? 'historical' : 'personal';
+
   return {
     userId: record.userId,
     userName: record.userName,
+    kind: normalizedKind,
+    description: record.description?.trim() ?? '',
     birthplace: record.birthplace ? cloneLocation(record.birthplace) : null,
     passengerName: record.passengerName?.trim() ?? '',
     journeys: record.journeys.map(cloneJourney),
   };
 }
 
-function createEmptyRecord(): UserJourneyRecord {
-  return cloneRecord(DEFAULT_USER_RECORD);
+function createEmptyRecord(kind: JourneyRecordKind = 'personal'): UserJourneyRecord {
+  return cloneRecord({
+    ...DEFAULT_USER_RECORD,
+    kind,
+  }, kind);
 }
 
 function isJourneyLocation(value: unknown): value is Journey['locations'][number] {
@@ -110,6 +149,8 @@ function isUserJourneyRecord(value: unknown): value is UserJourneyRecord {
   return (
     typeof candidate.userId === 'string' &&
     typeof candidate.userName === 'string' &&
+    (candidate.kind === undefined || isJourneyRecordKind(candidate.kind)) &&
+    (candidate.description === undefined || typeof candidate.description === 'string') &&
     (candidate.birthplace === undefined || candidate.birthplace === null || isJourneyLocation(candidate.birthplace)) &&
     (candidate.passengerName === undefined || typeof candidate.passengerName === 'string') &&
     Array.isArray(candidate.journeys) &&
@@ -140,10 +181,24 @@ function isLegacyJourneyArchive(value: unknown): value is LegacyJourneyArchive {
   );
 }
 
-function normalizeRecord(record: UserJourneyRecord): UserJourneyRecord {
+function isJourneyLibraryState(value: unknown): value is JourneyLibraryState {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<JourneyLibraryState>;
+
+  return (
+    typeof candidate.activeRecordId === 'string' &&
+    isUserJourneyRecord(candidate.personalRecord) &&
+    Array.isArray(candidate.historicalRecords) &&
+    candidate.historicalRecords.every(isUserJourneyRecord)
+  );
+}
+
+function normalizeRecord(record: UserJourneyRecord, kind: JourneyRecordKind): UserJourneyRecord {
   return {
-    userId: record.userId.trim() || DEFAULT_USER_RECORD.userId,
-    userName: record.userName.trim() || DEFAULT_USER_RECORD.userName,
+    userId: record.userId.trim() || (kind === 'personal' ? DEFAULT_USER_RECORD.userId : DEFAULT_USER_RECORD.userId),
+    userName: record.userName.trim() || (kind === 'personal' ? DEFAULT_USER_RECORD.userName : '未命名人物'),
+    kind,
+    description: record.description?.trim() ?? '',
     birthplace: record.birthplace && isJourneyLocation(record.birthplace)
       ? cloneLocation(record.birthplace)
       : null,
@@ -152,34 +207,119 @@ function normalizeRecord(record: UserJourneyRecord): UserJourneyRecord {
   };
 }
 
-function migrateLegacyArchive(archive: LegacyJourneyArchive): UserJourneyRecord {
-  const selectedTraveler = archive.travelers.find(traveler => traveler.id === archive.selectedTravelerId) ?? archive.travelers[0];
+function normalizeLibraryState(library: JourneyLibraryState): JourneyLibraryState {
+  const personalRecord = normalizeRecord(library.personalRecord, 'personal');
+  const usedIds = new Set<string>([personalRecord.userId]);
+  const existingHistoricalRecords = library.historicalRecords
+    .filter(isUserJourneyRecord)
+    .map(record => normalizeRecord(record, 'historical'))
+    .map(record => {
+      const nextId = createHistoricalRecordId(record.userName, usedIds, record.userId);
+      usedIds.add(nextId);
 
-  if (!selectedTraveler) return createEmptyRecord();
+      return {
+        ...record,
+        userId: nextId,
+        kind: 'historical' as const,
+      };
+    });
+  const defaultHistoricalRecords = FAMOUS_JOURNEY_PRESETS
+    .map(record => normalizeRecord(record, 'historical'))
+    .filter(record => !existingHistoricalRecords.some(existingRecord =>
+      existingRecord.userId === record.userId || existingRecord.userName === record.userName,
+    ))
+    .map(record => {
+      const nextId = createHistoricalRecordId(record.userName, usedIds, record.userId);
+      usedIds.add(nextId);
 
-  return normalizeRecord({
-    userId: selectedTraveler.id || DEFAULT_USER_RECORD.userId,
-    userName: selectedTraveler.name || DEFAULT_USER_RECORD.userName,
-    journeys: selectedTraveler.journeys,
-  });
+      return {
+        ...record,
+        userId: nextId,
+        kind: 'historical' as const,
+      };
+    });
+  const historicalRecords = [
+    ...defaultHistoricalRecords,
+    ...existingHistoricalRecords,
+  ];
+  const allRecordIds = new Set([personalRecord.userId, ...historicalRecords.map(record => record.userId)]);
+  const activeRecordId = allRecordIds.has(library.activeRecordId) ? library.activeRecordId : personalRecord.userId;
+
+  return {
+    personalRecord,
+    historicalRecords,
+    activeRecordId,
+  };
 }
 
-function loadRecordFromStorage(): UserJourneyRecord {
-  const seedRecord = createEmptyRecord();
+function migrateLegacyArchive(archive: LegacyJourneyArchive): JourneyLibraryState {
+  const selectedTraveler = archive.travelers.find(traveler => traveler.id === archive.selectedTravelerId) ?? archive.travelers[0];
+  const personalRecord = normalizeRecord({
+    userId: selectedTraveler?.id || DEFAULT_USER_RECORD.userId,
+    userName: selectedTraveler?.name || DEFAULT_USER_RECORD.userName,
+    journeys: selectedTraveler?.journeys ?? [],
+  }, 'personal');
+  const usedIds = new Set<string>([personalRecord.userId]);
+  const historicalRecords = archive.travelers
+    .filter(traveler => traveler.id !== selectedTraveler?.id)
+    .map(traveler => ({
+      userId: createHistoricalRecordId(traveler.name, usedIds, traveler.id),
+      userName: traveler.name,
+      kind: 'historical' as const,
+      description: '',
+      birthplace: null,
+      passengerName: '',
+      journeys: traveler.journeys,
+    }))
+    .map(record => {
+      usedIds.add(record.userId);
+      return normalizeRecord(record, 'historical');
+    });
+
+  return {
+    personalRecord,
+    historicalRecords,
+    activeRecordId: personalRecord.userId,
+  };
+}
+
+function loadLibraryFromStorage(): JourneyLibraryState {
+  const seedLibrary: JourneyLibraryState = {
+    personalRecord: createEmptyRecord('personal'),
+    historicalRecords: [],
+    activeRecordId: DEFAULT_USER_RECORD.userId,
+  };
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const rawLibrary = localStorage.getItem(STORAGE_KEY);
+    if (rawLibrary) {
+      const parsedLibrary = JSON.parse(rawLibrary) as unknown;
+
+      if (isJourneyLibraryState(parsedLibrary)) {
+        return normalizeLibraryState(parsedLibrary);
+      }
+    }
+
+    const raw = localStorage.getItem(LEGACY_RECORD_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
 
       if (isUserJourneyRecord(parsed)) {
-        return normalizeRecord(parsed);
+        return normalizeLibraryState({
+          personalRecord: normalizeRecord(parsed, 'personal'),
+          historicalRecords: [],
+          activeRecordId: parsed.userId,
+        });
       }
 
       if (Array.isArray(parsed)) {
-        return normalizeRecord({
-          ...seedRecord,
-          journeys: parsed.filter(isJourney),
+        return normalizeLibraryState({
+          personalRecord: normalizeRecord({
+            ...seedLibrary.personalRecord,
+            journeys: parsed.filter(isJourney),
+          }, 'personal'),
+          historicalRecords: [],
+          activeRecordId: seedLibrary.personalRecord.userId,
         });
       }
     }
@@ -188,39 +328,203 @@ function loadRecordFromStorage(): UserJourneyRecord {
     if (archiveRaw) {
       const parsedArchive = JSON.parse(archiveRaw) as unknown;
       if (isLegacyJourneyArchive(parsedArchive)) {
-        return migrateLegacyArchive(parsedArchive);
+        return normalizeLibraryState(migrateLegacyArchive(parsedArchive));
       }
     }
 
-    return seedRecord;
+    return seedLibrary;
   } catch {
-    return seedRecord;
+    return seedLibrary;
   }
 }
 
+function resolveActiveRecord(library: JourneyLibraryState) {
+  return library.activeRecordId === library.personalRecord.userId
+    ? library.personalRecord
+    : library.historicalRecords.find(record => record.userId === library.activeRecordId) ?? library.personalRecord;
+}
+
+function buildHistoricalRecord(
+  record: UserJourneyRecord,
+  currentLibrary: JourneyLibraryState,
+  preserveId = true,
+): UserJourneyRecord {
+  const usedIds = new Set<string>([
+    currentLibrary.personalRecord.userId,
+    ...currentLibrary.historicalRecords
+      .filter(existingRecord => existingRecord.userId !== record.userId)
+      .map(existingRecord => existingRecord.userId),
+  ]);
+  const normalized = normalizeRecord(record, 'historical');
+  const nextId = preserveId && record.userId && !usedIds.has(record.userId) && record.userId !== DEFAULT_USER_RECORD.userId
+    ? record.userId
+    : createHistoricalRecordId(normalized.userName, usedIds, normalized.userId);
+
+  return {
+    ...normalized,
+    userId: nextId,
+    kind: 'historical',
+  };
+}
+
 export function useJourneyStore() {
-  const [record, setRecord] = useState<UserJourneyRecord>(loadRecordFromStorage);
+  const [library, setLibrary] = useState<JourneyLibraryState>(loadLibraryFromStorage);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+    localStorage.removeItem(LEGACY_RECORD_STORAGE_KEY);
     localStorage.removeItem(ARCHIVE_STORAGE_KEY);
-  }, [record]);
+  }, [library]);
 
-  const journeys = useMemo(() => record.journeys, [record.journeys]);
+  const activeRecord = useMemo(() => resolveActiveRecord(library), [library]);
+  const journeys = useMemo(() => activeRecord.journeys, [activeRecord.journeys]);
+
+  const updateActiveRecord = (updater: (record: UserJourneyRecord) => UserJourneyRecord) => {
+    setLibrary(current => {
+      if (current.activeRecordId === current.personalRecord.userId) {
+        return {
+          ...current,
+          personalRecord: normalizeRecord(updater(current.personalRecord), 'personal'),
+        };
+      }
+
+      return {
+        ...current,
+        historicalRecords: current.historicalRecords.map(record => (
+          record.userId === current.activeRecordId
+            ? normalizeRecord(updater(record), 'historical')
+            : record
+        )),
+      };
+    });
+  };
+
+  const setActiveRecord = (recordId: string) => {
+    setLibrary(current => {
+      const availableIds = new Set([
+        current.personalRecord.userId,
+        ...current.historicalRecords.map(record => record.userId),
+      ]);
+
+      return {
+        ...current,
+        activeRecordId: availableIds.has(recordId) ? recordId : current.personalRecord.userId,
+      };
+    });
+  };
+
+  const createHistoricalRecord = (userName: string, description = '') => {
+    let createdRecordId = '';
+
+    setLibrary(current => {
+      const nextRecord = buildHistoricalRecord({
+        userId: '',
+        userName,
+        kind: 'historical',
+        description,
+        birthplace: null,
+        passengerName: '',
+        journeys: [],
+      }, current, false);
+      createdRecordId = nextRecord.userId;
+
+      return {
+        ...current,
+        historicalRecords: [nextRecord, ...current.historicalRecords],
+        activeRecordId: nextRecord.userId,
+      };
+    });
+
+    return createdRecordId;
+  };
+
+  const importHistoricalRecord = (record: UserJourneyRecord) => {
+    let importedRecordId = '';
+
+    setLibrary(current => {
+      const shouldUpdateExisting = Boolean(
+        record.userId
+        && record.userId !== current.personalRecord.userId
+        && current.historicalRecords.some(existingRecord => existingRecord.userId === record.userId),
+      );
+      const nextRecord = buildHistoricalRecord(record, current, shouldUpdateExisting);
+      importedRecordId = nextRecord.userId;
+      const existingIndex = current.historicalRecords.findIndex(existingRecord => existingRecord.userId === nextRecord.userId);
+      const historicalRecords = existingIndex === -1
+        ? [nextRecord, ...current.historicalRecords]
+        : current.historicalRecords.map(existingRecord => (
+            existingRecord.userId === nextRecord.userId ? nextRecord : existingRecord
+          ));
+
+      return {
+        ...current,
+        historicalRecords,
+        activeRecordId: nextRecord.userId,
+      };
+    });
+
+    return importedRecordId;
+  };
+
+  const importHistoricalRecordFromJson = (rawText: string) => {
+    try {
+      const parsed = JSON.parse(rawText) as unknown;
+
+      if (isUserJourneyRecord(parsed)) {
+        const recordId = importHistoricalRecord({
+          ...parsed,
+          kind: 'historical',
+        });
+
+        return {
+          ok: true,
+          recordId,
+        };
+      }
+
+      if (
+        parsed
+        && typeof parsed === 'object'
+        && 'record' in parsed
+        && isUserJourneyRecord((parsed as { record: unknown }).record)
+      ) {
+        const recordId = importHistoricalRecord({
+          ...(parsed as { record: UserJourneyRecord }).record,
+          kind: 'historical',
+        });
+
+        return {
+          ok: true,
+          recordId,
+        };
+      }
+
+      return {
+        ok: false,
+        error: 'JSON 需要是单个人物档案对象，至少包含 userName 和 journeys。',
+      };
+    } catch {
+      return {
+        ok: false,
+        error: 'JSON 解析失败，请检查格式后再导入。',
+      };
+    }
+  };
 
   const addJourney = (journey: Omit<Journey, 'id'>) => {
     const newJourney = cloneJourney({
       ...journey,
       id: crypto.randomUUID(),
     });
-    setRecord(current => ({
+
+    updateActiveRecord(current => ({
       ...current,
       journeys: [newJourney, ...current.journeys],
     }));
   };
 
   const updateJourney = (id: string, journey: Omit<Journey, 'id'>) => {
-    setRecord(current => ({
+    updateActiveRecord(current => ({
       ...current,
       journeys: current.journeys.map(existingJourney => (
         existingJourney.id === id
@@ -234,43 +538,74 @@ export function useJourneyStore() {
   };
 
   const deleteJourney = (id: string) => {
-    setRecord(current => ({
+    updateActiveRecord(current => ({
       ...current,
       journeys: current.journeys.filter(journey => journey.id !== id),
     }));
   };
 
   const setBirthplace = (birthplace: JourneyLocation | null) => {
-    setRecord(current => ({
+    updateActiveRecord(current => ({
       ...current,
       birthplace: birthplace ? cloneLocation(birthplace) : null,
     }));
   };
 
   const setPassengerName = (passengerName: string) => {
-    setRecord(current => ({
+    updateActiveRecord(current => ({
       ...current,
       passengerName,
     }));
   };
 
   const exportRecord = () => {
-    const dataStr = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(record, null, 2))}`;
+    const dataStr = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(activeRecord, null, 2))}`;
     const link = document.createElement('a');
     link.setAttribute('href', dataStr);
-    link.setAttribute('download', `${record.userId || 'travel-record'}.json`);
+    link.setAttribute('download', `${activeRecord.userId || 'travel-record'}.json`);
     document.body.appendChild(link);
     link.click();
     link.remove();
   };
 
+  const availableRecords = useMemo(
+    () => [
+      {
+        id: library.personalRecord.userId,
+        name: library.personalRecord.userName,
+        kind: 'personal' as const,
+        description: library.personalRecord.description?.trim() ?? '',
+        journeyCount: library.personalRecord.journeys.length,
+      },
+      ...library.historicalRecords.map(record => ({
+        id: record.userId,
+        name: record.userName,
+        kind: 'historical' as const,
+        description: record.description?.trim() ?? '',
+        journeyCount: record.journeys.length,
+      })),
+    ],
+    [library.historicalRecords, library.personalRecord],
+  );
+
   return {
-    record,
-    userId: record.userId,
-    userName: record.userName,
-    birthplace: record.birthplace ?? null,
-    passengerName: record.passengerName?.trim() ?? '',
+    library,
+    record: activeRecord,
+    activeRecord,
+    activeRecordId: activeRecord.userId,
+    activeRecordKind: activeRecord.kind ?? 'personal',
+    activeRecordName: activeRecord.userName,
+    activeRecordDescription: activeRecord.description?.trim() ?? '',
+    availableRecords,
+    userId: activeRecord.userId,
+    userName: activeRecord.userName,
+    birthplace: activeRecord.birthplace ?? null,
+    passengerName: activeRecord.passengerName?.trim() ?? '',
     journeys,
+    setActiveRecord,
+    createHistoricalRecord,
+    importHistoricalRecord,
+    importHistoricalRecordFromJson,
     addJourney,
     updateJourney,
     deleteJourney,

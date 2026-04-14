@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Journey, JourneyLocation, JourneyTransportMode } from '../types/journey';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import type {
+  Journey,
+  JourneyLocation,
+  JourneyRecordKind,
+  JourneyTransportMode,
+} from '../types/journey';
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
 import { filterJourneysByRecordFilter } from '../utils/journeyRecordFilter';
 import type { JourneyRecordFilter } from '../types/journey';
@@ -10,6 +15,11 @@ interface Props {
   onClose: () => void;
   passengerName: string;
   journeys: Journey[];
+  activeRecordId: string;
+  activeRecordKind: JourneyRecordKind;
+  activeRecordName: string;
+  activeRecordDescription: string;
+  availableRecords: JourneyArchiveOption[];
   activeFilter: JourneyRecordFilter | null;
   deleteJourney: (id: string) => void;
   exportRecord: () => void;
@@ -18,6 +28,13 @@ interface Props {
   onSelectJourney: (id: string) => void;
   onEditJourney: (journey: Journey) => void;
   onClearFilter: () => void;
+  onActiveRecordChange: (id: string) => void;
+  onCreateHistoricalRecord: (userName: string, description?: string) => void;
+  onImportHistoricalRecordFromJson: (rawText: string) => {
+    ok: boolean;
+    recordId?: string;
+    error?: string;
+  };
 }
 
 const TYPE_LABEL: Record<JourneyLocation['type'], string> = {
@@ -41,6 +58,14 @@ interface JourneyTimelineEntry {
   key: string;
   journey: Journey;
   location: JourneyLocation;
+}
+
+interface JourneyArchiveOption {
+  id: string;
+  name: string;
+  kind: JourneyRecordKind;
+  description: string;
+  journeyCount: number;
 }
 
 const VIEW_OPTIONS: Array<{ key: JourneyPanelViewMode; label: string }> = [
@@ -161,6 +186,11 @@ export default function JourneyPanel({
   onClose,
   passengerName,
   journeys,
+  activeRecordId,
+  activeRecordKind,
+  activeRecordName,
+  activeRecordDescription,
+  availableRecords,
   activeFilter,
   deleteJourney,
   exportRecord,
@@ -169,6 +199,9 @@ export default function JourneyPanel({
   onSelectJourney,
   onEditJourney,
   onClearFilter,
+  onActiveRecordChange,
+  onCreateHistoricalRecord,
+  onImportHistoricalRecordFromJson,
 }: Props) {
   const [viewMode, setViewMode] = useState<JourneyPanelViewMode>(() => {
     if (typeof window === 'undefined') return 'list';
@@ -284,6 +317,19 @@ export default function JourneyPanel({
                     清除
                   </button>
                 </div>
+              )}
+
+              {viewMode === 'timeline' && (
+                <HistoricalArchiveControls
+                  activeRecordId={activeRecordId}
+                  activeRecordKind={activeRecordKind}
+                  activeRecordName={activeRecordName}
+                  activeRecordDescription={activeRecordDescription}
+                  availableRecords={availableRecords}
+                  onActiveRecordChange={onActiveRecordChange}
+                  onCreateHistoricalRecord={onCreateHistoricalRecord}
+                  onImportHistoricalRecordFromJson={onImportHistoricalRecordFromJson}
+                />
               )}
 
               <div className={`${activeFilter ? 'mt-4' : 'mt-5'}`}>
@@ -410,6 +456,283 @@ function JourneyTimeline({
         })}
       </ol>
     </div>
+  );
+}
+
+function HistoricalArchiveControls({
+  activeRecordId,
+  activeRecordKind,
+  activeRecordName,
+  activeRecordDescription,
+  availableRecords,
+  onActiveRecordChange,
+  onCreateHistoricalRecord,
+  onImportHistoricalRecordFromJson,
+}: {
+  activeRecordId: string;
+  activeRecordKind: JourneyRecordKind;
+  activeRecordName: string;
+  activeRecordDescription: string;
+  availableRecords: JourneyArchiveOption[];
+  onActiveRecordChange: (id: string) => void;
+  onCreateHistoricalRecord: (userName: string, description?: string) => void;
+  onImportHistoricalRecordFromJson: (rawText: string) => {
+    ok: boolean;
+    recordId?: string;
+    error?: string;
+  };
+}) {
+  const [isCreatingRecord, setIsCreatingRecord] = useState(false);
+  const [isPastingJson, setIsPastingJson] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftDescription, setDraftDescription] = useState('');
+  const [jsonDraft, setJsonDraft] = useState('');
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setFeedback(null);
+  }, [activeRecordId]);
+
+  const handleCreateRecord = () => {
+    const nextName = draftName.trim();
+
+    if (!nextName) {
+      setFeedback({
+        tone: 'error',
+        message: '先写下这位人物的名字，再创建档案。',
+      });
+      return;
+    }
+
+    onCreateHistoricalRecord(nextName, draftDescription.trim());
+    setDraftName('');
+    setDraftDescription('');
+    setIsCreatingRecord(false);
+    setFeedback({
+      tone: 'success',
+      message: `已切换到 ${nextName} 的档案，接下来可以继续添加他的旅程。`,
+    });
+  };
+
+  const handleJsonImport = () => {
+    if (!jsonDraft.trim()) {
+      setFeedback({
+        tone: 'error',
+        message: '先粘贴一段人物旅程 JSON。',
+      });
+      return;
+    }
+
+    const result = onImportHistoricalRecordFromJson(jsonDraft);
+    if (!result.ok) {
+      setFeedback({
+        tone: 'error',
+        message: result.error ?? '导入失败，请检查 JSON。',
+      });
+      return;
+    }
+
+    setJsonDraft('');
+    setIsPastingJson(false);
+    setFeedback({
+      tone: 'success',
+      message: '人物档案已导入，地图和档案已经切换到这个人物。',
+    });
+  };
+
+  const handleFileImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    const result = onImportHistoricalRecordFromJson(await file.text());
+    if (!result.ok) {
+      setFeedback({
+        tone: 'error',
+        message: result.error ?? '导入失败，请检查 JSON。',
+      });
+      return;
+    }
+
+    setFeedback({
+      tone: 'success',
+      message: `已导入 ${file.name}，并切换到对应人物档案。`,
+    });
+  };
+
+  return (
+    <section className={`rounded-[26px] border border-stone-200/90 bg-white/70 px-4 py-4 ${availableRecords.length > 0 ? 'mb-5' : ''}`}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleFileImport}
+      />
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Timeline View</p>
+          <h3 className="mt-2 text-base font-medium text-stone-900">
+            {activeRecordName}
+            <span className="ml-2 text-sm font-normal text-stone-500">
+              {activeRecordKind === 'historical' ? '历史人物档案' : '我的旅程'}
+            </span>
+          </h3>
+          {activeRecordDescription ? (
+            <p className="mt-2 text-sm leading-6 text-stone-600">{activeRecordDescription}</p>
+          ) : null}
+        </div>
+
+        <label className="shrink-0">
+          <span className="sr-only">切换当前档案</span>
+          <select
+            value={activeRecordId}
+            onChange={event => onActiveRecordChange(event.target.value)}
+            className="rounded-full border border-stone-200 bg-[#f8f4ec] px-4 py-2 text-sm text-stone-700 outline-none transition hover:border-stone-300"
+          >
+            {availableRecords.map(record => (
+              <option key={record.id} value={record.id}>
+                {record.kind === 'historical' ? `人物 · ${record.name}` : `我的旅程 · ${record.name}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={`rounded-full border px-3 py-2 text-sm transition ${
+            isCreatingRecord
+              ? 'border-stone-900 bg-stone-900 text-white'
+              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-900'
+          }`}
+          onClick={() => {
+            setIsCreatingRecord(current => !current);
+            setIsPastingJson(false);
+          }}
+          aria-pressed={isCreatingRecord}
+        >
+          手动添加人物
+        </button>
+
+        <button
+          type="button"
+          className={`rounded-full border px-3 py-2 text-sm transition ${
+            isPastingJson
+              ? 'border-stone-900 bg-stone-900 text-white'
+              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-900'
+          }`}
+          onClick={() => {
+            setIsPastingJson(current => !current);
+            setIsCreatingRecord(false);
+          }}
+          aria-pressed={isPastingJson}
+        >
+          粘贴 JSON
+        </button>
+
+        <button
+          type="button"
+          className="rounded-full border border-stone-200 bg-white px-3 py-2 text-sm text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          导入 JSON 文件
+        </button>
+      </div>
+
+      {isCreatingRecord && (
+        <div className="mt-4 rounded-[22px] border border-stone-200/90 bg-[#fcfaf6] px-4 py-4">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <input
+              type="text"
+              value={draftName}
+              onChange={event => setDraftName(event.target.value)}
+              placeholder="人物姓名，例如 玄奘"
+              className="rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
+            />
+
+            <input
+              type="text"
+              value={draftDescription}
+              onChange={event => setDraftDescription(event.target.value)}
+              placeholder="一句简介，可选"
+              className="rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
+            />
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-stone-900 bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-800"
+              onClick={handleCreateRecord}
+            >
+              创建并切换
+            </button>
+
+            <button
+              type="button"
+              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
+              onClick={() => {
+                setIsCreatingRecord(false);
+                setDraftName('');
+                setDraftDescription('');
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isPastingJson && (
+        <div className="mt-4 rounded-[22px] border border-stone-200/90 bg-[#fcfaf6] px-4 py-4">
+          <textarea
+            value={jsonDraft}
+            onChange={event => setJsonDraft(event.target.value)}
+            placeholder='粘贴人物档案 JSON，例如 { "userName": "郑和", "journeys": [...] }'
+            rows={6}
+            className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm leading-6 text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
+          />
+
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-stone-900 bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-800"
+              onClick={handleJsonImport}
+            >
+              导入并切换
+            </button>
+
+            <button
+              type="button"
+              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
+              onClick={() => {
+                setIsPastingJson(false);
+                setJsonDraft('');
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-4 text-xs leading-5 text-stone-500">
+        新建人物后，可以继续用右上角的加号为这个人物补充旅程；切换人物后，地图和旅程档案会一起切换。
+      </p>
+
+      {feedback && (
+        <p className={`mt-3 text-sm ${
+          feedback.tone === 'error' ? 'text-red-600' : 'text-emerald-700'
+        }`}>
+          {feedback.message}
+        </p>
+      )}
+    </section>
   );
 }
 

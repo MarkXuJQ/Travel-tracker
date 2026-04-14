@@ -26,6 +26,14 @@ export default function TravelTracker() {
     journeys,
     birthplace,
     passengerName,
+    activeRecordId,
+    activeRecordKind,
+    activeRecordName,
+    activeRecordDescription,
+    availableRecords,
+    setActiveRecord,
+    createHistoricalRecord,
+    importHistoricalRecordFromJson,
     addJourney,
     updateJourney,
     deleteJourney,
@@ -66,6 +74,12 @@ export default function TravelTracker() {
       setSelectedJourneyId(null);
     }
   }, [journeys, selectedJourneyId]);
+
+  useEffect(() => {
+    setActiveFilter(null);
+    setSelectedJourneyId(null);
+    setSelectedProvinceName(null);
+  }, [activeRecordId]);
 
   useEffect(() => {
     if (!activeFilter || !selectedJourneyId) return;
@@ -264,6 +278,11 @@ export default function TravelTracker() {
         onClose={() => setPanelOpen(false)}
         passengerName={passengerName}
         journeys={journeys}
+        activeRecordId={activeRecordId}
+        activeRecordKind={activeRecordKind}
+        activeRecordName={activeRecordName}
+        activeRecordDescription={activeRecordDescription}
+        availableRecords={availableRecords}
         activeFilter={activeFilter}
         deleteJourney={handleDeleteJourney}
         exportRecord={exportRecord}
@@ -274,6 +293,9 @@ export default function TravelTracker() {
         }}
         onEditJourney={openEditJourneyEditor}
         onClearFilter={() => setActiveFilter(null)}
+        onActiveRecordChange={setActiveRecord}
+        onCreateHistoricalRecord={createHistoricalRecord}
+        onImportHistoricalRecordFromJson={importHistoricalRecordFromJson}
       />
 
       <div className="absolute bottom-5 left-4 z-[2100] sm:bottom-6">
