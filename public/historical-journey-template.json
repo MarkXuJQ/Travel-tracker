@@ -1,0 +1,26 @@
+{
+  "userId": "",
+  "userName": "请替换为人物姓名",
+  "kind": "historical",
+  "description": "一句人物简介，可选",
+  "birthplace": null,
+  "passengerName": "",
+  "journeys": [
+    {
+      "id": "journey-001",
+      "title": "旅程标题",
+      "date": "1405",
+      "locations": [
+        { "type": "city", "name": "南京市", "label": "南京" }
+      ]
+    },
+    {
+      "id": "journey-002",
+      "title": "海外停驻",
+      "date": "1405-07",
+      "locations": [
+        { "type": "country", "name": "Malaysia", "label": "马来西亚" }
+      ]
+    }
+  ]
+}

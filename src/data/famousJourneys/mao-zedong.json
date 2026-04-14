@@ -2,65 +2,437 @@
   "userId": "mao-zedong",
   "userName": "毛泽东",
   "kind": "historical",
-  "description": "从湖南出发，辗转长沙、北京、上海、广州、延安与苏联的重要革命行程。",
-  "birthplace": null,
+  "description": "毛泽东一生革命与建设行程全记录：从韶山出生到长沙求学，从建党上海到井冈山割据，从长征万里到延安抗战，从西柏坡指挥到北平建国，再到建国后全国视察与外交出访。",
+  "birthplace": {
+    "type": "city",
+    "name": "湘潭市",
+    "label": "湘潭"
+  },
   "passengerName": "",
   "journeys": [
     {
-      "id": "mao-zedong-1911-xiangtan",
-      "title": "湘中启程",
-      "date": "1911",
+      "id": "mao-1893-shaoshan-birth",
+      "title": "韶山诞生",
+      "date": "1893-12-26",
       "locations": [
         { "type": "city", "name": "湘潭市", "label": "湘潭" }
-      ]
+      ],
+      "description": "出生于湘潭县韶山冲南岸上屋场，小名'石三伢子'"
     },
     {
-      "id": "mao-zedong-1913-changsha",
-      "title": "求学长沙",
-      "date": "1913",
+      "id": "mao-1901-1909-shaoshan-education",
+      "title": "韶山私塾求学",
+      "date": "1901-1909",
+      "locations": [
+        { "type": "city", "name": "湘潭市", "label": "湘潭" }
+      ],
+      "description": "先后就读多处私塾，学习四书五经，接触《水浒传》《三国演义》等古典小说"
+    },
+    {
+      "id": "mao-1910-dongshan",
+      "title": "东山高等小学堂",
+      "date": "1910",
+      "locations": [
+        { "type": "city", "name": "湘潭市", "label": "湘潭" }
+      ],
+      "description": "首次离开韶山，接触梁启超《新民说》等维新思想"
+    },
+    {
+      "id": "mao-1911-changsha-revolution",
+      "title": "长沙从军",
+      "date": "1911",
       "locations": [
         { "type": "city", "name": "长沙市", "label": "长沙" }
-      ]
+      ],
+      "description": "武昌起义后投笔从戎，在长沙新军当列兵半年"
     },
     {
-      "id": "mao-zedong-1918-beijing",
-      "title": "初到北京",
-      "date": "1918",
+      "id": "mao-1912-1913-self-study",
+      "title": "省立图书馆自学",
+      "date": "1912-1913",
+      "locations": [
+        { "type": "city", "name": "长沙市", "label": "长沙" }
+      ],
+      "description": "退学自学半年，研读亚当·斯密、达尔文、卢梭等西方著作"
+    },
+    {
+      "id": "mao-1913-1918-first-normal",
+      "title": "湖南第一师范求学",
+      "date": "1913-1918",
+      "locations": [
+        { "type": "city", "name": "长沙市", "label": "长沙" }
+      ],
+      "description": "师从杨昌济，结识蔡和森，组织新民学会，奠定革命思想基础"
+    },
+    {
+      "id": "mao-1918-beijing-librarian",
+      "title": "北大图书馆助理员",
+      "date": "1918-1919",
       "locations": [
         { "type": "city", "name": "北京市", "label": "北京" }
-      ]
+      ],
+      "description": "经杨昌济介绍任图书馆助理员，结识李大钊、陈独秀，接触马克思主义"
     },
     {
-      "id": "mao-zedong-1921-shanghai",
-      "title": "上海建党时期",
-      "date": "1921",
+      "id": "mao-1919-shanghai-hunan",
+      "title": "沪湘往返与五四运动",
+      "date": "1919",
+      "locations": [
+        { "type": "city", "name": "上海市", "label": "上海" },
+        { "type": "city", "name": "长沙市", "label": "长沙" }
+      ],
+      "description": "护送赴法勤工俭学学生，回湘创办《湘江评论》，领导湖南五四运动"
+    },
+    {
+      "id": "mao-1920-hunan-self-rule",
+      "title": "湖南自治运动",
+      "date": "1920",
+      "locations": [
+        { "type": "city", "name": "长沙市", "label": "长沙" }
+      ],
+      "description": "在《大公报》发表文章主张湖南自治，组织驱张运动"
+    },
+    {
+      "id": "mao-1921-shanghai-cpc",
+      "title": "中共一大建党",
+      "date": "1921-07",
       "locations": [
         { "type": "city", "name": "上海市", "label": "上海" }
-      ]
+      ],
+      "description": "作为湖南代表出席中共一大，参与创建中国共产党"
     },
     {
-      "id": "mao-zedong-1924-guangzhou",
-      "title": "广州活动",
-      "date": "1924",
+      "id": "mao-1922-1923-hunan-worker",
+      "title": "湖南工运与中共三大",
+      "date": "1922-1923",
+      "locations": [
+        { "type": "city", "name": "长沙市", "label": "长沙" },
+        { "type": "city", "name": "广州市", "label": "广州" }
+      ],
+      "description": "领导安源路矿、粤汉铁路工运；出席中共三大，当选中央执行委员"
+    },
+    {
+      "id": "mao-1924-guangzhou-kmt",
+      "title": "广州国共合作",
+      "date": "1924-1925",
       "locations": [
         { "type": "city", "name": "广州市", "label": "广州" }
-      ]
+      ],
+      "description": "参与国民党一大，任国民党中央宣传部代理部长"
     },
     {
-      "id": "mao-zedong-1935-yanan",
-      "title": "转赴延安",
-      "date": "1935",
+      "id": "mao-1925-1927-hunan-peasant",
+      "title": "湖南农民运动考察",
+      "date": "1925-1927",
+      "locations": [
+        { "type": "city", "name": "湘潭市", "label": "湘潭" },
+        { "type": "city", "name": "武汉市", "label": "武汉" }
+      ],
+      "description": "撰写《湖南农民运动考察报告》，主办第六届农民运动讲习所"
+    },
+    {
+      "id": "mao-1927-autumn-uprising",
+      "title": "秋收起义",
+      "date": "1927-09",
+      "locations": [
+        { "type": "city", "name": "长沙市", "label": "长沙" },
+        { "type": "city", "name": "株洲市", "label": "株洲" }
+      ],
+      "description": "领导湘赣边界秋收起义，首次打出工农革命军旗帜"
+    },
+    {
+      "id": "mao-1927-jinggangshan",
+      "title": "创建井冈山根据地",
+      "date": "1927-10",
+      "locations": [
+        { "type": "city", "name": "吉安市", "label": "吉安" }
+      ],
+      "description": "开辟第一个农村革命根据地，提出'工农武装割据'思想"
+    },
+    {
+      "id": "mao-1929-1930-gannan-fujian",
+      "title": "赣南闽西根据地",
+      "date": "1929-1930",
+      "locations": [
+        { "type": "city", "name": "赣州市", "label": "赣州" },
+        { "type": "city", "name": "龙岩市", "label": "龙岩" }
+      ],
+      "description": "与朱德会师，扩大中央苏区，召开古田会议"
+    },
+    {
+      "id": "mao-1931-ruijin-soviet",
+      "title": "中华苏维埃共和国",
+      "date": "1931-11",
+      "locations": [
+        { "type": "city", "name": "赣州市", "label": "赣州" }
+      ],
+      "description": "当选中华苏维埃共和国临时中央政府主席"
+    },
+    {
+      "id": "mao-1934-long-march-start",
+      "title": "长征出发",
+      "date": "1934-10",
+      "locations": [
+        { "type": "city", "name": "赣州市", "label": "赣州" }
+      ],
+      "description": "中央红军从于都集结出发，开始战略转移"
+    },
+    {
+      "id": "mao-1934-channel-liping",
+      "title": "通道转兵与黎平会议",
+      "date": "1934-12",
+      "locations": [
+        { "type": "city", "name": "怀化市", "label": "怀化" },
+        { "type": "city", "name": "黔东南苗族侗族自治州", "label": "黔东南" }
+      ],
+      "description": "放弃北上湘西计划，改向贵州进军，黎平会议肯定毛泽东主张"
+    },
+    {
+      "id": "mao-1935-zunyi-conference",
+      "title": "遵义会议",
+      "date": "1935-01",
+      "locations": [
+        { "type": "city", "name": "遵义市", "label": "遵义" }
+      ],
+      "description": "确立毛泽东在党和红军中的领导地位，党史生死攸关转折点"
+    },
+    {
+      "id": "mao-1935-luding-xueshan",
+      "title": "飞夺泸定桥与翻雪山",
+      "date": "1935-05-06",
+      "locations": [
+        { "type": "city", "name": "甘孜藏族自治州", "label": "甘孜" },
+        { "type": "city", "name": "雅安市", "label": "雅安" },
+        { "type": "city", "name": "阿坝藏族羌族自治州", "label": "阿坝" }
+      ],
+      "description": "强渡大渡河、飞夺泸定桥，翻越第一座雪山夹金山"
+    },
+    {
+      "id": "mao-1935-maoergai-zhagana",
+      "title": "过草地与北上",
+      "date": "1935-08-09",
+      "locations": [
+        { "type": "city", "name": "阿坝藏族羌族自治州", "label": "阿坝" },
+        { "type": "city", "name": "甘南藏族自治州", "label": "甘南" }
+      ],
+      "description": "穿越松潘草地，突破天险腊子口"
+    },
+    {
+      "id": "mao-1935-wuqi-arrival",
+      "title": "抵达陕北吴起镇",
+      "date": "1935-10-19",
       "locations": [
         { "type": "city", "name": "延安市", "label": "延安" }
-      ]
+      ],
+      "description": "中央红军长征胜利结束，行程二万五千里"
     },
     {
-      "id": "mao-zedong-1949-russia",
-      "title": "访问苏联",
-      "date": "1949",
+      "id": "mao-1936-1937-yanan-base",
+      "title": "延安抗战指挥中心",
+      "date": "1936-1945",
       "locations": [
+        { "type": "city", "name": "延安市", "label": "延安" }
+      ],
+      "description": "撰写《论持久战》《新民主主义论》等，领导敌后抗战"
+    },
+    {
+      "id": "mao-1945-chongqing-talks",
+      "title": "重庆谈判",
+      "date": "1945-08-10",
+      "locations": [
+        { "type": "city", "name": "重庆市", "label": "重庆" }
+      ],
+      "description": "与蒋介石谈判43天，签订《双十协定》"
+    },
+    {
+      "id": "mao-1947-1948-shaanbei-xibaipo",
+      "title": "转战陕北与西柏坡指挥",
+      "date": "1947-1949",
+      "locations": [
+        { "type": "city", "name": "榆林市", "label": "榆林" },
+        { "type": "city", "name": "石家庄市", "label": "石家庄" }
+      ],
+      "description": "指挥三大战役，召开七届二中全会，提出'两个务必'"
+    },
+    {
+      "id": "mao-1949-beiping-founding",
+      "title": "进驻北平与开国大典",
+      "date": "1949-03-10",
+      "locations": [
+        { "type": "city", "name": "北京市", "label": "北京" }
+      ],
+      "description": "3月25日进驻香山，10月1日宣告中华人民共和国成立"
+    },
+    {
+      "id": "mao-1949-1950-moscow-visit",
+      "title": "首次访问苏联",
+      "date": "1949-12-06",
+      "locations": [
+        { "type": "city", "name": "哈尔滨市", "label": "哈尔滨" },
+        { "type": "city", "name": "长春市", "label": "长春" },
+        { "type": "city", "name": "沈阳市", "label": "沈阳" },
         { "type": "country", "name": "Russia", "label": "俄罗斯" }
-      ]
+      ],
+      "description": "签订《中苏友好同盟互助条约》，归国途中视察东北"
+    },
+    {
+      "id": "mao-1952-1953-domestic-inspection",
+      "title": "建国初期视察",
+      "date": "1952-1953",
+      "locations": [
+        { "type": "city", "name": "天津市", "label": "天津" },
+        { "type": "city", "name": "济南市", "label": "济南" },
+        { "type": "city", "name": "徐州市", "label": "徐州" },
+        { "type": "city", "name": "郑州市", "label": "郑州" },
+        { "type": "city", "name": "武汉市", "label": "武汉" },
+        { "type": "city", "name": "南京市", "label": "南京" }
+      ],
+      "description": "视察工农业建设，1953年乘军舰从武汉至南京"
+    },
+    {
+      "id": "mao-1954-1956-hangzhou-constitution",
+      "title": "杭州起草宪法",
+      "date": "1953-1954",
+      "locations": [
+        { "type": "city", "name": "杭州市", "label": "杭州" }
+      ],
+      "description": "主持起草第一部《中华人民共和国宪法》"
+    },
+    {
+      "id": "mao-1956-guangzhou-wuhan",
+      "title": "南方视察与首次乘飞机",
+      "date": "1956-05",
+      "locations": [
+        { "type": "city", "name": "武汉市", "label": "武汉" },
+        { "type": "city", "name": "广州市", "label": "广州" },
+        { "type": "city", "name": "长沙市", "label": "长沙" },
+        { "type": "city", "name": "南昌市", "label": "南昌" }
+      ],
+      "description": "首次乘专机出行，视察长江大桥建设"
+    },
+    {
+      "id": "mao-1958-great-leap-inspection",
+      "title": "大跃进时期密集视察",
+      "date": "1958",
+      "locations": [
+        { "type": "city", "name": "南宁市", "label": "南宁" },
+        { "type": "city", "name": "成都市", "label": "成都" },
+        { "type": "city", "name": "重庆市", "label": "重庆" },
+        { "type": "city", "name": "新乡市", "label": "新乡" },
+        { "type": "city", "name": "武汉市", "label": "武汉" },
+        { "type": "city", "name": "合肥市", "label": "合肥" },
+        { "type": "city", "name": "青岛市", "label": "青岛" }
+      ],
+      "description": "提出'人民公社好'，视察长江三峡，召开南宁、成都会议"
+    },
+    {
+      "id": "mao-1959-lushan-conference",
+      "title": "庐山会议",
+      "date": "1959-07",
+      "locations": [
+        { "type": "city", "name": "九江市", "label": "九江" }
+      ],
+      "description": "召开政治局扩大会议和八届八中全会"
+    },
+    {
+      "id": "mao-1961-1964-south-tour",
+      "title": "六十年代南方调研",
+      "date": "1961-1964",
+      "locations": [
+        { "type": "city", "name": "杭州市", "label": "杭州" },
+        { "type": "city", "name": "广州市", "label": "广州" },
+        { "type": "city", "name": "武汉市", "label": "武汉" },
+        { "type": "city", "name": "长沙市", "label": "长沙" },
+        { "type": "city", "name": "上海市", "label": "上海" }
+      ],
+      "description": "多次会见蒙哥马利，讨论继承人问题"
+    },
+    {
+      "id": "mao-1965-jinggangshan-return",
+      "title": "重上井冈山",
+      "date": "1965-05",
+      "locations": [
+        { "type": "city", "name": "吉安市", "label": "吉安" }
+      ],
+      "description": "38年后重访革命摇篮，写下《水调歌头·重上井冈山》"
+    },
+    {
+      "id": "mao-1966-dishuidong",
+      "title": "滴水洞隐居",
+      "date": "1966-06",
+      "locations": [
+        { "type": "city", "name": "湘潭市", "label": "湘潭" }
+      ],
+      "description": "文革前夕在故乡隐居11天，思考重大决策"
+    },
+    {
+      "id": "mao-1966-wuhan-swim",
+      "title": "武汉长江游泳",
+      "date": "1966-07-16",
+      "locations": [
+        { "type": "city", "name": "武汉市", "label": "武汉" }
+      ],
+      "description": "73岁横渡长江，此后'7·16'成为游泳纪念日"
+    },
+    {
+      "id": "mao-1967-wuhan-incident",
+      "title": "七二〇事件",
+      "date": "1967-07",
+      "locations": [
+        { "type": "city", "name": "武汉市", "label": "武汉" }
+      ],
+      "description": "武汉群众组织冲击东湖客舍，周恩来紧急赴汉处理"
+    },
+    {
+      "id": "mao-1970-lushan-plenum",
+      "title": "庐山九届二中全会",
+      "date": "1970-08",
+      "locations": [
+        { "type": "city", "name": "九江市", "label": "九江" }
+      ],
+      "description": "讨论设国家主席问题，与林彪集团产生分歧"
+    },
+    {
+      "id": "mao-1971-south-tour-linbiao",
+      "title": "南巡揭露林彪",
+      "date": "1971-08-09",
+      "locations": [
+        { "type": "city", "name": "武汉市", "label": "武汉" },
+        { "type": "city", "name": "长沙市", "label": "长沙" },
+        { "type": "city", "name": "南昌市", "label": "南昌" },
+        { "type": "city", "name": "杭州市", "label": "杭州" },
+        { "type": "city", "name": "上海市", "label": "上海" }
+      ],
+      "description": "沿途谈话揭露林彪反党集团，9月12日提前返京"
+    },
+    {
+      "id": "mao-1972-nixon-visit",
+      "title": "会见尼克松",
+      "date": "1972-02",
+      "locations": [
+        { "type": "city", "name": "北京市", "label": "北京" }
+      ],
+      "description": "与美国总统尼克松历史性会晤，开启中美关系正常化"
+    },
+    {
+      "id": "mao-1974-1975-south-rest",
+      "title": "晚年南方休养",
+      "date": "1974-1975",
+      "locations": [
+        { "type": "city", "name": "武汉市", "label": "武汉" },
+        { "type": "city", "name": "长沙市", "label": "长沙" },
+        { "type": "city", "name": "杭州市", "label": "杭州" }
+      ],
+      "description": "因健康原因在南方休养近9个月，未出席四届人大"
+    },
+    {
+      "id": "mao-1976-beijing-passing",
+      "title": "北京逝世",
+      "date": "1976-09-09",
+      "locations": [
+        { "type": "city", "name": "北京市", "label": "北京" }
+      ],
+      "description": "在北京逝世，享年83岁，遗体安葬于毛主席纪念堂"
     }
   ]
 }

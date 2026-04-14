@@ -2,6 +2,7 @@ import { CHINA_PROVINCES } from '../data/chinaData';
 import { getProvinceGeoJsonName } from '../data/chinaProvinceMeta';
 import {
   getCountryNameForLocation,
+  getLocationOptionByTypeAndName,
   getProvinceGeoNameByCityName,
   getProvinceLabelByCityName,
   TOTAL_TRACKABLE_CHINA_CITIES,
@@ -68,6 +69,20 @@ function addVisitedProvincePlace(visitedPlacesByProvince: Map<string, Set<string
   visitedPlacesByProvince.set(provinceGeoName, currentSet);
 }
 
+function getCanonicalPlaceLabel(location: Journey['locations'][number]) {
+  if (location.type === 'country') {
+    return getLocationOptionByTypeAndName('country', location.name)?.label ?? location.label;
+  }
+
+  if (location.type === 'province') {
+    return getLocationOptionByTypeAndName('province', location.name)?.label ?? location.label;
+  }
+
+  return getLocationOptionByTypeAndName('city', location.name)?.label
+    ?? getLocationOptionByTypeAndName('city', location.label)?.label
+    ?? location.label;
+}
+
 export function getTravelStats(journeys: Journey[]): TravelStats {
   const visitedCountries = new Set<string>();
   const visitedProvinces = new Set<string>();
@@ -83,14 +98,25 @@ export function getTravelStats(journeys: Journey[]): TravelStats {
       }
 
       if (location.type === 'province') {
-        const provinceLabel = toProvinceLabel(location.name);
+        const canonicalProvince = getLocationOptionByTypeAndName('province', location.name);
+        const provinceLabel = toProvinceLabel(canonicalProvince?.name ?? location.name)
+          ?? canonicalProvince?.label
+          ?? toProvinceLabel(location.label);
         if (provinceLabel) visitedProvinces.add(provinceLabel);
         continue;
       }
 
       if (location.type === 'city') {
-        visitedCities.add(location.name);
-        const provinceLabel = getProvinceLabelByCityName(location.name) ?? provinceByCityName.get(location.name);
+        const canonicalCity = getLocationOptionByTypeAndName('city', location.name)
+          ?? getLocationOptionByTypeAndName('city', location.label);
+        const cityName = canonicalCity?.name ?? location.name;
+        visitedCities.add(cityName);
+        const provinceLabel = getProvinceLabelByCityName(cityName)
+          ?? provinceByCityName.get(cityName)
+          ?? getProvinceLabelByCityName(location.name)
+          ?? getProvinceLabelByCityName(location.label)
+          ?? provinceByCityName.get(location.name)
+          ?? provinceByCityName.get(location.label);
         if (provinceLabel) visitedProvinces.add(provinceLabel);
       }
     }
@@ -124,21 +150,29 @@ export function getProvinceTravelStats(journeys: Journey[]): ProvinceTravelStat[
   for (const journey of journeys) {
     for (const location of journey.locations ?? []) {
       if (location.type === 'city') {
-        const provinceGeoName = getProvinceGeoNameByCityName(location.name);
+        const canonicalCity = getLocationOptionByTypeAndName('city', location.name)
+          ?? getLocationOptionByTypeAndName('city', location.label);
+        const cityName = canonicalCity?.name ?? location.name;
+        const provinceGeoName = getProvinceGeoNameByCityName(cityName)
+          ?? getProvinceGeoNameByCityName(location.name)
+          ?? getProvinceGeoNameByCityName(location.label);
         if (!provinceGeoName) continue;
 
-        addVisitedProvincePlace(visitedPlacesByProvince, provinceGeoName, location.label);
+        addVisitedProvincePlace(visitedPlacesByProvince, provinceGeoName, getCanonicalPlaceLabel(location));
         continue;
       }
 
       if (location.type !== 'province') continue;
 
-      const trackablePlaceLabels = provinceTrackablePlaceLabelsByGeoName.get(location.name);
+      const canonicalProvince = getLocationOptionByTypeAndName('province', location.name)
+        ?? getLocationOptionByTypeAndName('province', location.label);
+      const provinceGeoName = canonicalProvince?.name ?? location.name;
+      const trackablePlaceLabels = provinceTrackablePlaceLabelsByGeoName.get(provinceGeoName);
       if (!trackablePlaceLabels || trackablePlaceLabels.length !== 1) {
         continue;
       }
 
-      addVisitedProvincePlace(visitedPlacesByProvince, location.name, trackablePlaceLabels[0]);
+      addVisitedProvincePlace(visitedPlacesByProvince, provinceGeoName, trackablePlaceLabels[0]);
     }
   }
 

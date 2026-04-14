@@ -1,4 +1,4 @@
-export type JourneyDatePrecision = 'year' | 'month' | 'day';
+export type JourneyDatePrecision = 'year' | 'month' | 'day' | 'year-range';
 
 export interface ParsedJourneyDate {
   raw: string;
@@ -7,6 +7,7 @@ export interface ParsedJourneyDate {
   year: number | null;
   month: number | null;
   day: number | null;
+  rangeEndYear: number | null;
   isValid: boolean;
 }
 
@@ -17,6 +18,8 @@ function toSanitizedDateInput(value?: string) {
     .trim()
     .replace(/\s+/g, '')
     .replace(/[./]/g, '-')
+    .replace(/[~～—–]/g, '-')
+    .replace(/至/g, '-')
     .replace(/年/g, '-')
     .replace(/月/g, '-')
     .replace(/日/g, '')
@@ -46,8 +49,34 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year: null,
       month: null,
       day: null,
+      rangeEndYear: null,
       isValid: false,
     };
+  }
+
+  const yearRangeMatch = sanitized.match(/^(\d{4})-(\d{4})$/);
+  if (yearRangeMatch) {
+    const startYear = Number.parseInt(yearRangeMatch[1], 10);
+    const endYear = Number.parseInt(yearRangeMatch[2], 10);
+
+    if (
+      Number.isInteger(startYear)
+      && Number.isInteger(endYear)
+      && startYear >= 1000
+      && endYear <= 9999
+      && startYear <= endYear
+    ) {
+      return {
+        raw,
+        normalized: `${startYear}-${endYear}`,
+        precision: 'year-range',
+        year: startYear,
+        month: null,
+        day: null,
+        rangeEndYear: endYear,
+        isValid: true,
+      };
+    }
   }
 
   if (!/^\d{4}(?:-\d{1,2}){0,2}$/.test(sanitized)) {
@@ -58,6 +87,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year: null,
       month: null,
       day: null,
+      rangeEndYear: null,
       isValid: false,
     };
   }
@@ -73,6 +103,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year: null,
       month: null,
       day: null,
+      rangeEndYear: null,
       isValid: false,
     };
   }
@@ -85,6 +116,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year,
       month: null,
       day: null,
+      rangeEndYear: null,
       isValid: true,
     };
   }
@@ -98,6 +130,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year: null,
       month: null,
       day: null,
+      rangeEndYear: null,
       isValid: false,
     };
   }
@@ -110,6 +143,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year,
       month,
       day: null,
+      rangeEndYear: null,
       isValid: true,
     };
   }
@@ -123,6 +157,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
       year: null,
       month: null,
       day: null,
+      rangeEndYear: null,
       isValid: false,
     };
   }
@@ -134,6 +169,7 @@ export function parseJourneyDate(value?: string): ParsedJourneyDate {
     year,
     month,
     day,
+    rangeEndYear: null,
     isValid: true,
   };
 }
@@ -146,6 +182,10 @@ export function normalizeJourneyDate(value?: string) {
 export function formatJourneyDate(value?: string) {
   const parsed = parseJourneyDate(value);
   if (!parsed.isValid) return value?.trim() ?? '';
+
+  if (parsed.precision === 'year-range' && parsed.year !== null && parsed.rangeEndYear !== null) {
+    return `${parsed.year}-${parsed.rangeEndYear}`;
+  }
 
   if (parsed.precision === 'year') {
     return String(parsed.year);

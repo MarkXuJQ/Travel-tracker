@@ -107,8 +107,21 @@ function deriveHighlights(journeys: Journey[]) {
 function buildWorldPaint(countries: string[], tone: MapTone, hiddenCountry?: string | null): any {
   const excludedCountry = hiddenCountry && hiddenCountry !== 'China' ? hiddenCountry : null;
   const names = countries.filter(country => country !== 'China' && country !== excludedCountry);
+  const hasHighlights = names.length > 0;
 
   if (tone === 'night') {
+    if (!hasHighlights) {
+      return excludedCountry
+        ? {
+            'fill-color': ['case', ['==', ['get', 'name'], excludedCountry], 'transparent', '#020617'],
+            'fill-opacity': ['case', ['==', ['get', 'name'], excludedCountry], 0, 0.06],
+          }
+        : {
+            'fill-color': '#020617',
+            'fill-opacity': 0.06,
+          };
+    }
+
     return {
       'fill-color': excludedCountry
         ? ['case', ['==', ['get', 'name'], excludedCountry], 'transparent', ['match', ['get', 'name'], names, '#22d3ee', '#020617']]
@@ -117,6 +130,18 @@ function buildWorldPaint(countries: string[], tone: MapTone, hiddenCountry?: str
         ? ['case', ['==', ['get', 'name'], excludedCountry], 0, ['match', ['get', 'name'], names, 0.34, 0.06]]
         : ['match', ['get', 'name'], names, 0.34, 0.06],
     };
+  }
+
+  if (!hasHighlights) {
+    return excludedCountry
+      ? {
+          'fill-color': ['case', ['==', ['get', 'name'], excludedCountry], 'transparent', '#ecfeff'],
+          'fill-opacity': ['case', ['==', ['get', 'name'], excludedCountry], 0, 0.05],
+        }
+      : {
+          'fill-color': '#ecfeff',
+          'fill-opacity': 0.05,
+        };
   }
 
   return {
@@ -207,6 +232,76 @@ function buildCityGlowPaint(highlighted: string[], tone: MapTone): any {
     'line-opacity': ['match', ['get', 'name'], highlighted, 0.5, 0],
     'line-width': ['match', ['get', 'name'], highlighted, 2.2, 0],
     'line-blur': ['match', ['get', 'name'], highlighted, 1.3, 0],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildSelectedCityPaint(highlighted: string[], tone: MapTone): any {
+  if (highlighted.length === 0) return { 'fill-color': 'transparent', 'fill-opacity': 0 };
+
+  if (tone === 'night') {
+    return {
+      'fill-color': ['match', ['get', 'name'], highlighted, '#d8f3ff', 'transparent'],
+      'fill-opacity': ['match', ['get', 'name'], highlighted, 0.34, 0],
+    };
+  }
+
+  return {
+    'fill-color': ['match', ['get', 'name'], highlighted, '#fff3db', 'transparent'],
+    'fill-opacity': ['match', ['get', 'name'], highlighted, 0.82, 0],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildSelectedCityHaloPaint(highlighted: string[], tone: MapTone): any {
+  if (highlighted.length === 0) {
+    return {
+      'line-color': 'transparent',
+      'line-opacity': 0,
+      'line-width': 0,
+      'line-blur': 0,
+    };
+  }
+
+  if (tone === 'night') {
+    return {
+      'line-color': ['match', ['get', 'name'], highlighted, '#7dd3fc', 'transparent'],
+      'line-opacity': ['match', ['get', 'name'], highlighted, 0.72, 0],
+      'line-width': ['match', ['get', 'name'], highlighted, 4.2, 0],
+      'line-blur': ['match', ['get', 'name'], highlighted, 2.6, 0],
+    };
+  }
+
+  return {
+    'line-color': ['match', ['get', 'name'], highlighted, '#f59e0b', 'transparent'],
+    'line-opacity': ['match', ['get', 'name'], highlighted, 0.34, 0],
+    'line-width': ['match', ['get', 'name'], highlighted, 5.2, 0],
+    'line-blur': ['match', ['get', 'name'], highlighted, 2.2, 0],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildSelectedCityBorderPaint(highlighted: string[], tone: MapTone): any {
+  if (highlighted.length === 0) {
+    return {
+      'line-color': 'transparent',
+      'line-opacity': 0,
+      'line-width': 0,
+    };
+  }
+
+  if (tone === 'night') {
+    return {
+      'line-color': ['match', ['get', 'name'], highlighted, '#e0f2fe', 'transparent'],
+      'line-opacity': ['match', ['get', 'name'], highlighted, 0.98, 0],
+      'line-width': ['match', ['get', 'name'], highlighted, 1.65, 0],
+    };
+  }
+
+  return {
+    'line-color': ['match', ['get', 'name'], highlighted, '#92400e', 'transparent'],
+    'line-opacity': ['match', ['get', 'name'], highlighted, 0.95, 0],
+    'line-width': ['match', ['get', 'name'], highlighted, 1.55, 0],
   };
 }
 
@@ -478,6 +573,7 @@ export default function TravelMap({
   const [cityData, setCityData] = useState<GeoJSON.FeatureCollection | null>(null);
   const mapRef = useRef<MapRef | null>(null);
   const cityLoadingRef = useRef(false);
+  const lastAutoFocusedJourneyIdRef = useRef<string | null>(null);
   const mapTheme = BASE_MAPS[baseMap];
   const isNightMode = mapTheme.tone === 'night';
 
@@ -560,12 +656,35 @@ export default function TravelMap({
     if (!cityData) return [];
     return getHighlightedCityNames(cityData.features as GeoJSON.Feature[], cities, provinces);
   }, [cityData, cities, provinces]);
+  const selectedJourneyHighlights = useMemo(
+    () => deriveHighlights(selectedJourney ? [selectedJourney] : []),
+    [selectedJourney],
+  );
+  const selectedJourneyCityNames = useMemo(() => {
+    if (!cityData) return [];
+
+    return getHighlightedCityNames(
+      cityData.features as GeoJSON.Feature[],
+      selectedJourneyHighlights.cities,
+      selectedJourneyHighlights.provinces,
+    );
+  }, [cityData, selectedJourneyHighlights.cities, selectedJourneyHighlights.provinces]);
   const cityPaint = useMemo(() => {
     return buildCityPaint(highlightedCityNames, mapTheme.tone);
   }, [highlightedCityNames, mapTheme.tone]);
   const cityGlowPaint = useMemo(() => {
     return buildCityGlowPaint(highlightedCityNames, mapTheme.tone);
   }, [highlightedCityNames, mapTheme.tone]);
+  const selectedCityPaint = useMemo(() => {
+    return buildSelectedCityPaint(selectedJourneyCityNames, mapTheme.tone);
+  }, [mapTheme.tone, selectedJourneyCityNames]);
+  const selectedCityHaloPaint = useMemo(() => {
+    return buildSelectedCityHaloPaint(selectedJourneyCityNames, mapTheme.tone);
+  }, [mapTheme.tone, selectedJourneyCityNames]);
+  const selectedCityBorderPaint = useMemo(() => {
+    return buildSelectedCityBorderPaint(selectedJourneyCityNames, mapTheme.tone);
+  }, [mapTheme.tone, selectedJourneyCityNames]);
+  const selectedJourneyId = selectedJourney?.id ?? null;
   const selectedRouteStops = useMemo(() => resolveRouteStops(selectedJourney), [selectedJourney]);
   const selectedRouteData = useMemo(() => {
     if (selectedRouteStops.length === 0) return null;
@@ -573,8 +692,16 @@ export default function TravelMap({
   }, [selectedRouteStops]);
 
   useEffect(() => {
+    if (!selectedJourneyId) {
+      lastAutoFocusedJourneyIdRef.current = null;
+      return;
+    }
+
+    if (lastAutoFocusedJourneyIdRef.current === selectedJourneyId) return;
+
     const map = mapRef.current?.getMap();
     if (!map || selectedRouteStops.length === 0) return;
+    lastAutoFocusedJourneyIdRef.current = selectedJourneyId;
 
     if (selectedRouteStops.length === 1) {
       const [lat, lng] = selectedRouteStops[0].coords;
@@ -603,7 +730,7 @@ export default function TravelMap({
         maxZoom: 5.8,
       },
     );
-  }, [panelOpen, selectedRouteStops]);
+  }, [panelOpen, selectedJourneyId, selectedRouteStops]);
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
@@ -770,10 +897,22 @@ export default function TravelMap({
               paint={cityPaint as any}
             />
             <Layer
+              id="selected-journey-city-fill"
+              type="fill"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={selectedCityPaint as any}
+            />
+            <Layer
               id="city-glow"
               type="line"
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               paint={cityGlowPaint as any}
+            />
+            <Layer
+              id="selected-journey-city-halo"
+              type="line"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={selectedCityHaloPaint as any}
             />
             <Layer
               id="city-border"
@@ -783,6 +922,12 @@ export default function TravelMap({
                 'line-opacity': isNightMode ? 0.42 : 0.26,
                 'line-width': isNightMode ? 0.4 : 0.35,
               }}
+            />
+            <Layer
+              id="selected-journey-city-border"
+              type="line"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paint={selectedCityBorderPaint as any}
             />
           </Source>
         )}

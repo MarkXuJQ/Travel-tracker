@@ -73,7 +73,7 @@ const PROVINCES: LocationOption[] = CHINA_PROVINCES.map(p => ({
   coords: [p.lat, p.lng] as [number, number],
 }));
 
-function normalizeCityGeoName(name: string) {
+export function normalizeCityGeoName(name: string) {
   return name.endsWith('市')
     || name.endsWith('区')
     || name.endsWith('自治州')
@@ -145,6 +145,30 @@ export function getLocationOptionByTypeAndName(
     );
   }
 
+  if (type === 'province') {
+    return allLocations.find(option =>
+      option.type === 'province'
+      && (
+        option.name === name
+        || option.label === name
+        || option.name === getProvinceGeoJsonName(name)
+      )
+    );
+  }
+
+  if (type === 'city') {
+    const normalizedName = normalizeCityGeoName(name);
+
+    return allLocations.find(option =>
+      option.type === 'city'
+      && (
+        option.name === name
+        || option.name === normalizedName
+        || option.label === name
+      )
+    );
+  }
+
   return allLocations.find(option => option.type === type && option.name === name);
 }
 
@@ -158,11 +182,15 @@ export function resolveJourneyLocationCoords(location: JourneyLocation): [number
 }
 
 export function getProvinceGeoNameByCityName(cityName: string): string | null {
-  return provinceGeoNameByCityName.get(cityName) ?? null;
+  return provinceGeoNameByCityName.get(cityName)
+    ?? provinceGeoNameByCityName.get(normalizeCityGeoName(cityName))
+    ?? null;
 }
 
 export function getProvinceLabelByCityName(cityName: string): string | null {
-  return provinceLabelByCityName.get(cityName) ?? null;
+  return provinceLabelByCityName.get(cityName)
+    ?? provinceLabelByCityName.get(normalizeCityGeoName(cityName))
+    ?? null;
 }
 
 export function getLocationLabel(type: JourneyLocation['type'], name: string): string | null {

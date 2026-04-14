@@ -1,5 +1,6 @@
 export type JourneyTransportMode = 'default' | 'train' | 'flight';
 export type JourneyRecordKind = 'personal' | 'historical';
+export type JourneyRecordSource = 'preset' | 'custom';
 
 export interface JourneyLocation {
   type: 'country' | 'province' | 'city';
@@ -38,6 +39,7 @@ export interface UserJourneyRecord {
   userId: string;
   userName: string;
   kind?: JourneyRecordKind;
+  source?: JourneyRecordSource;
   description?: string;
   birthplace?: JourneyLocation | null;
   passengerName?: string;
@@ -48,4 +50,5 @@ export interface JourneyLibraryState {
   personalRecord: UserJourneyRecord;
   historicalRecords: UserJourneyRecord[];
   activeRecordId: string;
+  dismissedPresetRecordIds?: string[];
 }

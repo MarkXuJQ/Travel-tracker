@@ -34,6 +34,7 @@ export default function TravelTracker() {
     setActiveRecord,
     createHistoricalRecord,
     importHistoricalRecordFromJson,
+    deleteHistoricalRecord,
     addJourney,
     updateJourney,
     deleteJourney,
@@ -296,6 +297,7 @@ export default function TravelTracker() {
         onActiveRecordChange={setActiveRecord}
         onCreateHistoricalRecord={createHistoricalRecord}
         onImportHistoricalRecordFromJson={importHistoricalRecordFromJson}
+        onDeleteHistoricalRecord={deleteHistoricalRecord}
       />
 
       <div className="absolute bottom-5 left-4 z-[2100] sm:bottom-6">

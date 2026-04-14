@@ -35,6 +35,7 @@ interface Props {
     recordId?: string;
     error?: string;
   };
+  onDeleteHistoricalRecord: (id: string) => void;
 }
 
 const TYPE_LABEL: Record<JourneyLocation['type'], string> = {
@@ -222,6 +223,7 @@ export default function JourneyPanel({
   onActiveRecordChange,
   onCreateHistoricalRecord,
   onImportHistoricalRecordFromJson,
+  onDeleteHistoricalRecord,
 }: Props) {
   const [viewMode, setViewMode] = useState<JourneyPanelViewMode>(() => {
     if (typeof window === 'undefined') return 'list';
@@ -263,11 +265,9 @@ export default function JourneyPanel({
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="关闭旅程面板"
-        className="fixed inset-0 z-[1900] bg-slate-950/20 backdrop-blur-[2px]"
-        onClick={onClose}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-[1900] bg-slate-950/12"
       />
 
       <aside className="fixed inset-y-0 right-0 z-[2000] flex h-full w-full max-w-[30rem] flex-col overflow-hidden border-l border-stone-200/80 bg-[#f6f1e8] text-stone-800 shadow-[-24px_0_60px_rgba(15,23,42,0.16)]">
@@ -349,6 +349,7 @@ export default function JourneyPanel({
                   onActiveRecordChange={onActiveRecordChange}
                   onCreateHistoricalRecord={onCreateHistoricalRecord}
                   onImportHistoricalRecordFromJson={onImportHistoricalRecordFromJson}
+                  onDeleteHistoricalRecord={onDeleteHistoricalRecord}
                 />
               )}
 
@@ -489,6 +490,7 @@ function HistoricalArchiveControls({
   onActiveRecordChange,
   onCreateHistoricalRecord,
   onImportHistoricalRecordFromJson,
+  onDeleteHistoricalRecord,
 }: {
   activeRecordId: string;
   activeRecordKind: JourneyRecordKind;
@@ -502,12 +504,11 @@ function HistoricalArchiveControls({
     recordId?: string;
     error?: string;
   };
+  onDeleteHistoricalRecord: (id: string) => void;
 }) {
   const [isCreatingRecord, setIsCreatingRecord] = useState(false);
-  const [isPastingJson, setIsPastingJson] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
-  const [jsonDraft, setJsonDraft] = useState('');
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -536,32 +537,6 @@ function HistoricalArchiveControls({
     });
   };
 
-  const handleJsonImport = () => {
-    if (!jsonDraft.trim()) {
-      setFeedback({
-        tone: 'error',
-        message: '先粘贴一段人物旅程 JSON。',
-      });
-      return;
-    }
-
-    const result = onImportHistoricalRecordFromJson(jsonDraft);
-    if (!result.ok) {
-      setFeedback({
-        tone: 'error',
-        message: result.error ?? '导入失败，请检查 JSON。',
-      });
-      return;
-    }
-
-    setJsonDraft('');
-    setIsPastingJson(false);
-    setFeedback({
-      tone: 'success',
-      message: '人物档案已导入，地图和档案已经切换到这个人物。',
-    });
-  };
-
   const handleFileImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -581,6 +556,29 @@ function HistoricalArchiveControls({
       tone: 'success',
       message: `已导入 ${file.name}，并切换到对应人物档案。`,
     });
+  };
+
+  const handleTemplateDownload = () => {
+    const link = document.createElement('a');
+    link.href = '/historical-journey-template.json';
+    link.download = 'historical-journey-template.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setFeedback({
+      tone: 'success',
+      message: 'JSON 模板已下载，填写后可直接导入 JSON 文件。',
+    });
+  };
+
+  const handleDeleteRecord = () => {
+    if (activeRecordKind !== 'historical') return;
+
+    const confirmed = window.confirm(`删除 ${activeRecordName} 的人物档案？删除后会从当前列表中移除。`);
+    if (!confirmed) return;
+
+    onDeleteHistoricalRecord(activeRecordId);
+    setIsCreatingRecord(false);
   };
 
   return (
@@ -633,7 +631,6 @@ function HistoricalArchiveControls({
           }`}
           onClick={() => {
             setIsCreatingRecord(current => !current);
-            setIsPastingJson(false);
           }}
           aria-pressed={isCreatingRecord}
         >
@@ -642,18 +639,10 @@ function HistoricalArchiveControls({
 
         <button
           type="button"
-          className={`rounded-full border px-3 py-2 text-sm transition ${
-            isPastingJson
-              ? 'border-stone-900 bg-stone-900 text-white'
-              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-900'
-          }`}
-          onClick={() => {
-            setIsPastingJson(current => !current);
-            setIsCreatingRecord(false);
-          }}
-          aria-pressed={isPastingJson}
+          className="rounded-full border border-stone-200 bg-white px-3 py-2 text-sm text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
+          onClick={handleTemplateDownload}
         >
-          粘贴 JSON
+          下载 JSON 模板
         </button>
 
         <button
@@ -663,6 +652,16 @@ function HistoricalArchiveControls({
         >
           导入 JSON 文件
         </button>
+
+        {activeRecordKind === 'historical' && (
+          <button
+            type="button"
+            className="rounded-full border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+            onClick={handleDeleteRecord}
+          >
+            删除当前人物
+          </button>
+        )}
       </div>
 
       {isCreatingRecord && (
@@ -709,41 +708,8 @@ function HistoricalArchiveControls({
         </div>
       )}
 
-      {isPastingJson && (
-        <div className="mt-4 rounded-[22px] border border-stone-200/90 bg-[#fcfaf6] px-4 py-4">
-          <textarea
-            value={jsonDraft}
-            onChange={event => setJsonDraft(event.target.value)}
-            placeholder='粘贴人物档案 JSON，例如 { "userName": "郑和", "journeys": [...] }'
-            rows={6}
-            className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm leading-6 text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
-          />
-
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-full border border-stone-900 bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-800"
-              onClick={handleJsonImport}
-            >
-              导入并切换
-            </button>
-
-            <button
-              type="button"
-              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 transition hover:border-stone-300 hover:text-stone-900"
-              onClick={() => {
-                setIsPastingJson(false);
-                setJsonDraft('');
-              }}
-            >
-              取消
-            </button>
-          </div>
-        </div>
-      )}
-
       <p className="mt-4 text-xs leading-5 text-stone-500">
-        新建人物后，可以继续用右上角的加号为这个人物补充旅程；切换人物后，地图和旅程档案会一起切换。
+        可先下载模板，按同样结构填写后直接导入 JSON 文件；新建人物后，也可以继续用右上角的加号补充旅程。
       </p>
 
       {feedback && (
@@ -784,6 +750,41 @@ function JourneyLinkButton({
   );
 }
 
+type JourneyRemarkTone = 'stone' | 'sky' | 'amber';
+
+function getJourneyRemark(journey: Journey) {
+  const remark = journey.description?.trim();
+  return remark ? remark : null;
+}
+
+function JourneyRemarkPanel({
+  text,
+  tone,
+}: {
+  text: string | null;
+  tone: JourneyRemarkTone;
+}) {
+  if (!text) return null;
+
+  const toneClassName = tone === 'amber'
+    ? 'border-[#e6d1aa] bg-[#f6ead9] text-stone-700'
+    : tone === 'sky'
+      ? 'border-[#8fd4ec] bg-[#def1f8] text-sky-950/80'
+      : 'border-stone-200/90 bg-[#f1ebe1] text-stone-700';
+  const labelClassName = tone === 'amber'
+    ? 'text-amber-950/50'
+    : tone === 'sky'
+      ? 'text-sky-950/48'
+      : 'text-stone-500';
+
+  return (
+    <div className={`relative border-t px-5 py-3 sm:px-6 ${toneClassName}`}>
+      <p className={`text-[10px] uppercase tracking-[0.24em] ${labelClassName}`}>备注</p>
+      <p className="mt-1.5 text-sm leading-6">{text}</p>
+    </div>
+  );
+}
+
 function MinimalArchiveJourneyCard({
   journey,
   locationSummary,
@@ -806,6 +807,7 @@ function MinimalArchiveJourneyCard({
   onDelete: (id: string) => void;
 }) {
   const actionButtonClassName = 'flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-stone-400 transition hover:border-white/80 hover:bg-white/82';
+  const remark = getJourneyRemark(journey);
 
   return (
     <article
@@ -889,12 +891,9 @@ function MinimalArchiveJourneyCard({
           </div>
         </div>
 
-        {journey.description ? (
-          <p className="mt-4 border-t border-dashed border-stone-200/90 pt-4 text-sm leading-7 text-stone-600">
-            {journey.description}
-          </p>
-        ) : null}
       </div>
+
+      <JourneyRemarkPanel text={remark} tone="stone" />
     </article>
   );
 }
@@ -961,6 +960,7 @@ function JourneyCard({
   const stubPaddingClassName = isFlightTicket ? 'px-3 pb-4 pt-[4.35rem]' : 'px-3 pb-10 pt-4';
   const ticketGridClassName = isFlightTicket ? 'grid grid-cols-[minmax(0,1fr)_5.75rem]' : 'grid grid-cols-1';
   const actionButtonClassName = 'flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-stone-400 transition hover:border-white/80 hover:bg-white/82';
+  const remark = getJourneyRemark(journey);
 
   if (isHistoricalRecord || usesMinimalArchiveLayout) {
     return (
@@ -1096,12 +1096,9 @@ function JourneyCard({
             </div>
           </div>
 
-          {journey.description && (
-            <p className="mt-4 border-t border-dashed border-stone-200/90 pt-4 text-sm leading-7 text-stone-600">
-              {journey.description}
-            </p>
-          )}
         </div>
+
+        <JourneyRemarkPanel text={remark} tone="stone" />
       </article>
     );
   }
@@ -1120,250 +1117,248 @@ function JourneyCard({
         }
       }}
     >
-      {isFlightTicket ? (
-        <>
-          <div className="absolute inset-0 bg-[#f6f1e7]" />
-          <div className="absolute inset-x-0 top-0 h-12 bg-[linear-gradient(90deg,#f5b84e_0%,#efab38_56%,#e49b24_100%)]" />
-          <div className="absolute inset-y-0 right-0 w-[5.75rem] border-l border-dashed border-[#d8cab2] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(249,245,239,0.98)_100%)]" />
-          <div className="absolute right-0 top-0 h-12 w-[5.75rem] bg-[linear-gradient(90deg,#f2b240_0%,#eaa32d_100%)]" />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_56%_60%,rgba(15,23,42,0.05)_0%,rgba(15,23,42,0.05)_18%,rgba(15,23,42,0)_19%),radial-gradient(circle_at_44%_66%,rgba(15,23,42,0.035)_0%,rgba(15,23,42,0.035)_14%,rgba(15,23,42,0)_15%),radial-gradient(circle_at_70%_70%,rgba(15,23,42,0.03)_0%,rgba(15,23,42,0.03)_15%,rgba(15,23,42,0)_16%)]" />
-        </>
-      ) : (
-        <>
-          <div className="absolute inset-0 bg-[#eaf7fc]" />
-          <div className="absolute inset-x-0 bottom-0 h-8 bg-[#58afd9]" />
-          <div className="absolute inset-x-0 bottom-0 z-[1] flex h-8 items-center px-5 sm:px-6">
-            <p className="font-tabular text-[10px] tracking-[0.26em] text-white/92">{TRAIN_TICKET_ID}</p>
-          </div>
-        </>
-      )}
+      <div className="relative overflow-hidden">
+        {isFlightTicket ? (
+          <>
+            <div className="absolute inset-0 bg-[#f6f1e7]" />
+            <div className="absolute inset-x-0 top-0 h-12 bg-[linear-gradient(90deg,#f5b84e_0%,#efab38_56%,#e49b24_100%)]" />
+            <div className="absolute inset-y-0 right-0 w-[5.75rem] border-l border-dashed border-[#d8cab2] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(249,245,239,0.98)_100%)]" />
+            <div className="absolute right-0 top-0 h-12 w-[5.75rem] bg-[linear-gradient(90deg,#f2b240_0%,#eaa32d_100%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_56%_60%,rgba(15,23,42,0.05)_0%,rgba(15,23,42,0.05)_18%,rgba(15,23,42,0)_19%),radial-gradient(circle_at_44%_66%,rgba(15,23,42,0.035)_0%,rgba(15,23,42,0.035)_14%,rgba(15,23,42,0)_15%),radial-gradient(circle_at_70%_70%,rgba(15,23,42,0.03)_0%,rgba(15,23,42,0.03)_15%,rgba(15,23,42,0)_16%)]" />
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-[#eaf7fc]" />
+            <div className="absolute inset-x-0 bottom-0 h-8 bg-[#58afd9]" />
+            <div className="absolute inset-x-0 bottom-0 z-[1] flex h-8 items-center px-5 sm:px-6">
+              <p className="font-tabular text-[10px] tracking-[0.26em] text-white/92">{TRAIN_TICKET_ID}</p>
+            </div>
+          </>
+        )}
 
-      <div className={ticketGridClassName}>
-        <div className={`relative ${contentPaddingClassName}`}>
-          {isFlightTicket ? (
-            <div className="absolute inset-x-0 top-0 z-[1] flex h-12 items-center justify-between px-5 sm:px-6">
-              <div className="flex min-w-0 items-center gap-3 text-stone-950">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/24 text-stone-950">
-                  <TransportModeIcon mode={transportMode} tone="light" className="h-3.5 w-3.5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-950/92">Boarding Pass</p>
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-stone-900/68">{entryLabel}</p>
+        <div className={ticketGridClassName}>
+          <div className={`relative ${contentPaddingClassName}`}>
+            {isFlightTicket ? (
+              <div className="absolute inset-x-0 top-0 z-[1] flex h-12 items-center justify-between px-5 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3 text-stone-950">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/24 text-stone-950">
+                    <TransportModeIcon mode={transportMode} tone="light" className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-950/92">Boarding Pass</p>
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-stone-900/68">{entryLabel}</p>
+                  </div>
                 </div>
+
+                <p className="font-tabular text-[11px] tracking-[0.14em] text-stone-950/92">{ticketSerial}</p>
+              </div>
+            ) : null}
+
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                {!isFlightTicket ? (
+                  <>
+                    <p className="text-[10px] font-semibold tracking-[0.08em] text-[#d33f49]">
+                      {ticketSerial}
+                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-200/90 bg-white/84 text-sky-900">
+                        <TransportModeIcon mode={transportMode} tone="light" className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.3em] text-sky-950/72">
+                          {ticketLabel}
+                        </p>
+                        <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">{entryLabel}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+
+                <h4 className={`font-editorial text-[1.45rem] leading-snug text-stone-900 ${isFlightTicket ? '' : 'mt-4'}`}>
+                  {journey.url ? (
+                    <a
+                      href={journey.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="transition hover:text-stone-700"
+                      onClick={event => event.stopPropagation()}
+                    >
+                      {journey.title}
+                    </a>
+                    ) : (
+                      journey.title
+                    )}
+                  </h4>
               </div>
 
-              <p className="font-tabular text-[11px] tracking-[0.14em] text-stone-950/92">{ticketSerial}</p>
-            </div>
-          ) : null}
-
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              {!isFlightTicket ? (
-                <>
-                  <p className="text-[10px] font-semibold tracking-[0.08em] text-[#d33f49]">
-                    {ticketSerial}
-                  </p>
-                  <div className="mt-2 flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-200/90 bg-white/84 text-sky-900">
-                      <TransportModeIcon mode={transportMode} tone="light" className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-sky-950/72">
-                        {ticketLabel}
-                      </p>
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">{entryLabel}</p>
-                    </div>
-                  </div>
-                </>
-              ) : null}
-
-              <h4 className={`font-editorial text-[1.45rem] leading-snug text-stone-900 ${isFlightTicket ? '' : 'mt-4'}`}>
-                {journey.url ? (
-                  <a
-                    href={journey.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition hover:text-stone-700"
-                    onClick={event => event.stopPropagation()}
-                  >
-                    {journey.title}
-                  </a>
-                  ) : (
-                    journey.title
-                  )}
-                </h4>
-            </div>
-
-            <div className={`shrink-0 ${isFlightTicket ? 'text-right' : 'flex flex-col items-end gap-3 text-right'}`}>
-              {isFlightTicket ? (
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
-                  <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
-                </div>
-              ) : (
-                <>
+              <div className={`shrink-0 ${isFlightTicket ? 'text-right' : 'flex flex-col items-end gap-3 text-right'}`}>
+                {isFlightTicket ? (
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
                     <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
                   </div>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Date</p>
+                      <p className="font-tabular mt-2 text-sm text-stone-800">{formattedJourneyDate}</p>
+                    </div>
 
-                  <div className="flex items-center gap-2">
-                    <JourneyLinkButton
-                      url={journey.url}
-                      className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
-                    />
+                    <div className="flex items-center gap-2">
+                      <JourneyLinkButton
+                        url={journey.url}
+                        className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
+                      />
 
-                    <button
-                      type="button"
-                      title="修改旅程"
-                      className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
-                      onClick={event => {
-                        event.stopPropagation();
-                        onEdit();
-                      }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-                      </svg>
-                    </button>
+                      <button
+                        type="button"
+                        title="修改旅程"
+                        className={`${actionButtonClassName} ${editing ? 'border-sky-200 bg-white/90 text-sky-900' : 'hover:text-sky-900'}`}
+                        onClick={event => {
+                          event.stopPropagation();
+                          onEdit();
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                        </svg>
+                      </button>
 
-                    <button
-                      type="button"
-                      title="删除旅程"
-                      className={`${actionButtonClassName} hover:text-red-500`}
-                      onClick={event => {
-                        event.stopPropagation();
-                        onDelete(journey.id);
-                      }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </>
-              )}
+                      <button
+                        type="button"
+                        title="删除旅程"
+                        className={`${actionButtonClassName} hover:text-red-500`}
+                        onClick={event => {
+                          event.stopPropagation();
+                          onDelete(journey.id);
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className={`mt-5 rounded-[24px] border px-4 py-4 ${routeShellClassName}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">
+                    {isFlightTicket ? 'From' : '始发'}
+                  </p>
+                  <p className={`mt-2 truncate leading-none text-stone-900 ${
+                    isFlightTicket ? 'text-[1.5rem] font-semibold' : 'font-editorial text-[1.75rem]'
+                  }`}>
+                    {displayFrom}
+                  </p>
+                </div>
+
+                <div className="flex min-w-[3rem] flex-col items-center gap-2 px-2">
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                    isFlightTicket ? 'bg-stone-900 text-white' : 'bg-white/84 text-sky-950'
+                  }`}>
+                    <TransportModeIcon mode={transportMode} tone="dark" className="h-4 w-4" />
+                  </span>
+                  <span className={`block w-10 border-t border-dashed ${
+                    isFlightTicket ? 'border-stone-400' : 'border-sky-600/35'
+                  }`} />
+                </div>
+
+                <div className="min-w-0 text-right">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">
+                    {isFlightTicket ? 'To' : '终到'}
+                  </p>
+                  <p className={`mt-2 truncate leading-none text-stone-900 ${
+                    isFlightTicket ? 'text-[1.5rem] font-semibold' : 'font-editorial text-[1.75rem]'
+                  }`}>
+                    {displayTo}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-dashed border-stone-200/80 pt-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-stone-600">{ticketReference}</p>
+              </div>
             </div>
           </div>
 
-          <div className={`mt-5 rounded-[24px] border px-4 py-4 ${routeShellClassName}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">
-                  {isFlightTicket ? 'From' : '始发'}
-                </p>
-                <p className={`mt-2 truncate leading-none text-stone-900 ${
-                  isFlightTicket ? 'text-[1.5rem] font-semibold' : 'font-editorial text-[1.75rem]'
-                }`}>
-                  {displayFrom}
-                </p>
+          {isFlightTicket ? (
+            <div className={`relative flex flex-col items-center justify-between border-l border-dashed ${stubPaddingClassName} ${stubClassName}`}>
+              <div className="absolute inset-x-0 top-0 h-12 bg-[linear-gradient(90deg,#f3b448_0%,#eba630_100%)]" />
+              <div className="absolute inset-x-0 top-0 z-[1] flex h-12 flex-col items-center justify-center text-stone-950">
+                <p className="text-[9px] uppercase tracking-[0.24em] text-stone-950/72">{flightStubLabel?.title}</p>
+                <p className="font-tabular text-[11px] tracking-[0.18em] text-stone-950/92">{flightStubLabel?.value}</p>
               </div>
 
-              <div className="flex min-w-[3rem] flex-col items-center gap-2 px-2">
-                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  isFlightTicket ? 'bg-stone-900 text-white' : 'bg-white/84 text-sky-950'
-                }`}>
+              <div className="relative flex flex-col items-center gap-2 text-center">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white/94 text-stone-700">
                   <TransportModeIcon mode={transportMode} tone="dark" className="h-4 w-4" />
                 </span>
-                <span className={`block w-10 border-t border-dashed ${
-                  isFlightTicket ? 'border-stone-400' : 'border-sky-600/35'
-                }`} />
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Flight</p>
+                  <p className="mt-1 text-xs font-medium text-stone-800">Stub</p>
+                </div>
               </div>
 
-              <div className="min-w-0 text-right">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">
-                  {isFlightTicket ? 'To' : '终到'}
-                </p>
-                <p className={`mt-2 truncate leading-none text-stone-900 ${
-                  isFlightTicket ? 'text-[1.5rem] font-semibold' : 'font-editorial text-[1.75rem]'
-                }`}>
-                  {displayTo}
+              <div className="relative flex flex-col items-center gap-2">
+                <JourneyLinkButton
+                  url={journey.url}
+                  className={`${actionButtonClassName} ${
+                    editing
+                      ? 'border-stone-300 bg-white/90 text-stone-700'
+                      : 'hover:text-stone-700'
+                  }`}
+                />
+
+                <button
+                  type="button"
+                  title="删除旅程"
+                  className={`${actionButtonClassName} hover:text-red-500`}
+                  onClick={event => {
+                    event.stopPropagation();
+                    onDelete(journey.id);
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  title="修改旅程"
+                  className={`${actionButtonClassName} ${
+                    editing
+                      ? 'border-stone-300 bg-white/90 text-stone-700'
+                      : 'hover:text-stone-700'
+                  }`}
+                  onClick={event => {
+                    event.stopPropagation();
+                    onEdit();
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="relative text-center">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Passenger</p>
+                <p className="mt-1 max-w-[4.25rem] break-words text-[11px] font-medium leading-4 text-stone-900">
+                  {displayPassengerName}
                 </p>
               </div>
             </div>
-
-            <div className="mt-4 border-t border-dashed border-stone-200/80 pt-3">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-stone-600">{ticketReference}</p>
-            </div>
-          </div>
-
-          {journey.description && (
-            <p className="mt-4 border-t border-dashed border-stone-200/90 pt-4 text-sm leading-7 text-stone-600">
-              {journey.description}
-            </p>
-          )}
+          ) : null}
         </div>
-
-        {isFlightTicket ? (
-          <div className={`relative flex flex-col items-center justify-between border-l border-dashed ${stubPaddingClassName} ${stubClassName}`}>
-            <div className="absolute inset-x-0 top-0 h-12 bg-[linear-gradient(90deg,#f3b448_0%,#eba630_100%)]" />
-            <div className="absolute inset-x-0 top-0 z-[1] flex h-12 flex-col items-center justify-center text-stone-950">
-              <p className="text-[9px] uppercase tracking-[0.24em] text-stone-950/72">{flightStubLabel?.title}</p>
-              <p className="font-tabular text-[11px] tracking-[0.18em] text-stone-950/92">{flightStubLabel?.value}</p>
-            </div>
-
-            <div className="relative flex flex-col items-center gap-2 text-center">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white/94 text-stone-700">
-                <TransportModeIcon mode={transportMode} tone="dark" className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Flight</p>
-                <p className="mt-1 text-xs font-medium text-stone-800">Stub</p>
-              </div>
-            </div>
-
-            <div className="relative flex flex-col items-center gap-2">
-              <JourneyLinkButton
-                url={journey.url}
-                className={`${actionButtonClassName} ${
-                  editing
-                    ? 'border-stone-300 bg-white/90 text-stone-700'
-                    : 'hover:text-stone-700'
-                }`}
-              />
-
-              <button
-                type="button"
-                title="删除旅程"
-                className={`${actionButtonClassName} hover:text-red-500`}
-                onClick={event => {
-                  event.stopPropagation();
-                  onDelete(journey.id);
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-
-              <button
-                type="button"
-                title="修改旅程"
-                className={`${actionButtonClassName} ${
-                  editing
-                    ? 'border-stone-300 bg-white/90 text-stone-700'
-                    : 'hover:text-stone-700'
-                }`}
-                onClick={event => {
-                  event.stopPropagation();
-                  onEdit();
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 14.536a4 4 0 01-1.414.95L7 17l1.514-4.122A4 4 0 019 11z" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="relative text-center">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-stone-500">Passenger</p>
-              <p className="mt-1 max-w-[4.25rem] break-words text-[11px] font-medium leading-4 text-stone-900">
-                {displayPassengerName}
-              </p>
-            </div>
-          </div>
-        ) : null}
       </div>
+
+      <JourneyRemarkPanel text={remark} tone={isFlightTicket ? 'amber' : 'sky'} />
     </article>
   );
 }

@@ -529,7 +529,7 @@ export default function JourneyEditorModal({
                     type="text"
                     inputMode="numeric"
                     autoComplete="off"
-                    placeholder="2026 / 2026-04 / 2026-04-13"
+                    placeholder="2026 / 2026-04 / 2026-04-13 / 1974-1975"
                     className={`${fieldClassName} font-tabular`}
                     value={form.date ?? ''}
                     onChange={event => setForm(current => ({ ...current, date: event.target.value }))}
@@ -541,7 +541,7 @@ export default function JourneyEditorModal({
                     }}
                   />
                   {!hasValidDate ? (
-                    <span className="mt-2 block text-[11px] text-red-500">支持 YYYY、YYYY-MM 或 YYYY-MM-DD</span>
+                    <span className="mt-2 block text-[11px] text-red-500">支持 YYYY、YYYY-MM、YYYY-MM-DD 或 YYYY-YYYY</span>
                   ) : null}
                 </label>
               </div>
