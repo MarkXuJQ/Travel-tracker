@@ -272,21 +272,12 @@ function isRetiredPresetHistoricalRecord(record: UserJourneyRecord) {
 function normalizeLibraryState(library: JourneyLibraryState): JourneyLibraryState {
   const personalRecord = normalizeRecord(library.personalRecord, 'personal');
   const usedIds = new Set<string>([personalRecord.userId]);
-  const dismissedPresetRecordIds = (library.dismissedPresetRecordIds ?? [])
-    .filter((item): item is string => typeof item === 'string')
-    .map(item => item.trim())
-    .filter(Boolean);
-  const dismissedPresetRecordIdSet = new Set(dismissedPresetRecordIds);
   const rawHistoricalRecords = library.historicalRecords
     .filter(isUserJourneyRecord)
     .map(record => normalizeRecord(record, 'historical'));
   const presetRecordIds = new Set(FAMOUS_JOURNEY_PRESETS.map(record => record.userId));
   const presetRecordNames = new Set(FAMOUS_JOURNEY_PRESETS.map(record => record.userName));
   const presetHistoricalRecords: UserJourneyRecord[] = FAMOUS_JOURNEY_PRESETS.flatMap(presetRecord => {
-    if (dismissedPresetRecordIdSet.has(presetRecord.userId)) {
-      return [];
-    }
-
     const existingRecord = rawHistoricalRecords.find(record =>
       record.userId === presetRecord.userId || record.userName === presetRecord.userName,
     ) ?? null;
@@ -339,7 +330,7 @@ function normalizeLibraryState(library: JourneyLibraryState): JourneyLibraryStat
     personalRecord,
     historicalRecords,
     activeRecordId,
-    dismissedPresetRecordIds: dismissedPresetRecordIds.filter(recordId => presetRecordIds.has(recordId)),
+    dismissedPresetRecordIds: [],
   };
 }
 
@@ -360,8 +351,7 @@ function createPersistedLibraryState(library: JourneyLibraryState): JourneyLibra
         source: 'custom',
       }, 'historical', 'custom')),
     activeRecordId: library.activeRecordId,
-    dismissedPresetRecordIds: (library.dismissedPresetRecordIds ?? [])
-      .filter(recordId => presetRecordIds.has(recordId)),
+    dismissedPresetRecordIds: [],
   };
 }
 
@@ -599,11 +589,6 @@ export function useJourneyStore() {
       if (!targetRecord) return current;
 
       const historicalRecords = current.historicalRecords.filter(record => record.userId !== recordId);
-      const dismissedPresetRecordIds = new Set(current.dismissedPresetRecordIds ?? []);
-
-      if (targetRecord.source === 'preset' || FAMOUS_JOURNEY_PRESETS.some(record => record.userId === recordId)) {
-        dismissedPresetRecordIds.add(recordId);
-      }
 
       return {
         ...current,
@@ -611,7 +596,7 @@ export function useJourneyStore() {
         activeRecordId: current.activeRecordId === recordId
           ? (historicalRecords[0]?.userId ?? current.personalRecord.userId)
           : current.activeRecordId,
-        dismissedPresetRecordIds: [...dismissedPresetRecordIds],
+        dismissedPresetRecordIds: [],
       };
     });
   };
@@ -744,6 +729,7 @@ export function useJourneyStore() {
     activeRecord,
     activeRecordId: activeRecord.userId,
     activeRecordKind: activeRecord.kind ?? 'personal',
+    activeRecordSource: activeRecord.source,
     activeRecordName: activeRecord.userName,
     activeRecordDescription: activeRecord.description?.trim() ?? '',
     availableRecords,

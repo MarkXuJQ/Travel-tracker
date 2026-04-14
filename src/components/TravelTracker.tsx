@@ -28,6 +28,7 @@ export default function TravelTracker() {
     passengerName,
     activeRecordId,
     activeRecordKind,
+    activeRecordSource,
     activeRecordName,
     activeRecordDescription,
     availableRecords,
@@ -281,6 +282,7 @@ export default function TravelTracker() {
         journeys={journeys}
         activeRecordId={activeRecordId}
         activeRecordKind={activeRecordKind}
+        activeRecordSource={activeRecordSource}
         activeRecordName={activeRecordName}
         activeRecordDescription={activeRecordDescription}
         availableRecords={availableRecords}

@@ -3,6 +3,7 @@ import type {
   Journey,
   JourneyLocation,
   JourneyRecordKind,
+  JourneyRecordSource,
   JourneyTransportMode,
 } from '../types/journey';
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
@@ -17,6 +18,7 @@ interface Props {
   journeys: Journey[];
   activeRecordId: string;
   activeRecordKind: JourneyRecordKind;
+  activeRecordSource?: JourneyRecordSource;
   activeRecordName: string;
   activeRecordDescription: string;
   availableRecords: JourneyArchiveOption[];
@@ -209,6 +211,7 @@ export default function JourneyPanel({
   journeys,
   activeRecordId,
   activeRecordKind,
+  activeRecordSource,
   activeRecordName,
   activeRecordDescription,
   availableRecords,
@@ -343,6 +346,7 @@ export default function JourneyPanel({
                 <HistoricalArchiveControls
                   activeRecordId={activeRecordId}
                   activeRecordKind={activeRecordKind}
+                  activeRecordSource={activeRecordSource}
                   activeRecordName={activeRecordName}
                   activeRecordDescription={activeRecordDescription}
                   availableRecords={availableRecords}
@@ -484,6 +488,7 @@ function JourneyTimeline({
 function HistoricalArchiveControls({
   activeRecordId,
   activeRecordKind,
+  activeRecordSource,
   activeRecordName,
   activeRecordDescription,
   availableRecords,
@@ -494,6 +499,7 @@ function HistoricalArchiveControls({
 }: {
   activeRecordId: string;
   activeRecordKind: JourneyRecordKind;
+  activeRecordSource?: JourneyRecordSource;
   activeRecordName: string;
   activeRecordDescription: string;
   availableRecords: JourneyArchiveOption[];
@@ -653,7 +659,7 @@ function HistoricalArchiveControls({
           导入 JSON 文件
         </button>
 
-        {activeRecordKind === 'historical' && (
+        {activeRecordKind === 'historical' && activeRecordSource === 'custom' && (
           <button
             type="button"
             className="rounded-full border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
