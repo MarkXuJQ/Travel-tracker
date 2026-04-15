@@ -7,6 +7,7 @@
     "build": "vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
     "preview": "vite preview",
+    "sync:personal-data": "node scripts/sync-personal-travel-data.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

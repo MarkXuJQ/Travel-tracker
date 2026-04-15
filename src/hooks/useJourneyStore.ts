@@ -8,6 +8,7 @@ import type {
   UserJourneyRecord,
 } from '../types/journey';
 import { FAMOUS_JOURNEY_PRESETS } from '../data/famousJourneyArchives';
+import personalJourneyLibrary from '../data/personalJourneyLibrary.json';
 import { normalizeJourneyDate } from '../utils/journeyDate';
 
 const STORAGE_KEY = 'travel_globe_journey_library';
@@ -15,9 +16,12 @@ const LEGACY_RECORD_STORAGE_KEY = 'travel_globe_journeys';
 const ARCHIVE_STORAGE_KEY = 'travel_globe_archive';
 const RETIRED_PRESET_HISTORICAL_RECORD_IDS = new Set(['zheng-he']);
 const RETIRED_PRESET_HISTORICAL_RECORD_NAMES = new Set(['郑和']);
+const PERSONAL_PLACEHOLDER_RECORD_IDS = new Set(['me', 'traveler-self']);
+const PERSONAL_PLACEHOLDER_RECORD_NAMES = new Set(['我']);
+const DEFAULT_LIBRARY_STATE = personalJourneyLibrary as unknown as JourneyLibraryState;
 const DEFAULT_USER_RECORD: UserJourneyRecord = {
-  userId: 'me',
-  userName: '我',
+  userId: 'mark',
+  userName: 'Mark',
   kind: 'personal',
   description: '',
   birthplace: null,
@@ -99,28 +103,6 @@ function createHistoricalRecordId(name: string, usedIds: Set<string>, preferredI
   }
 
   return nextId;
-}
-
-function cloneRecord(record: UserJourneyRecord, fallbackKind: JourneyRecordKind = 'personal'): UserJourneyRecord {
-  const normalizedKind = record.kind === 'historical' || fallbackKind === 'historical' ? 'historical' : 'personal';
-
-  return {
-    userId: record.userId,
-    userName: record.userName,
-    kind: normalizedKind,
-    source: normalizedKind === 'historical' ? record.source : undefined,
-    description: record.description?.trim() ?? '',
-    birthplace: record.birthplace ? cloneLocation(record.birthplace) : null,
-    passengerName: record.passengerName?.trim() ?? '',
-    journeys: record.journeys.map(cloneJourney),
-  };
-}
-
-function createEmptyRecord(kind: JourneyRecordKind = 'personal'): UserJourneyRecord {
-  return cloneRecord({
-    ...DEFAULT_USER_RECORD,
-    kind,
-  }, kind);
 }
 
 function isJourneyLocation(value: unknown): value is Journey['locations'][number] {
@@ -388,13 +370,78 @@ function migrateLegacyArchive(archive: LegacyJourneyArchive): JourneyLibraryStat
   };
 }
 
-function loadLibraryFromStorage(): JourneyLibraryState {
-  const seedLibrary: JourneyLibraryState = {
-    personalRecord: createEmptyRecord('personal'),
-    historicalRecords: [],
-    activeRecordId: DEFAULT_USER_RECORD.userId,
+function createSeedLibrary() {
+  return normalizeLibraryState(DEFAULT_LIBRARY_STATE);
+}
+
+function isPlaceholderPersonalRecord(record: UserJourneyRecord) {
+  return (
+    record.journeys.length === 0 &&
+    !record.description &&
+    !record.birthplace &&
+    !record.passengerName &&
+    (
+      PERSONAL_PLACEHOLDER_RECORD_IDS.has(record.userId) ||
+      PERSONAL_PLACEHOLDER_RECORD_NAMES.has(record.userName)
+    )
+  );
+}
+
+function mergeSeedPersonalRecord(
+  seedRecord: UserJourneyRecord,
+  storedRecord: UserJourneyRecord,
+): UserJourneyRecord {
+  const normalizedSeedRecord = normalizeRecord(seedRecord, 'personal');
+  const normalizedStoredRecord = normalizeRecord(storedRecord, 'personal');
+  const shouldPreserveStoredIdentity = !isPlaceholderPersonalRecord(normalizedStoredRecord);
+
+  return normalizeRecord({
+    ...normalizedSeedRecord,
+    ...normalizedStoredRecord,
+    userId: shouldPreserveStoredIdentity ? normalizedStoredRecord.userId : normalizedSeedRecord.userId,
+    userName: shouldPreserveStoredIdentity ? normalizedStoredRecord.userName : normalizedSeedRecord.userName,
+    description: normalizedStoredRecord.description || normalizedSeedRecord.description,
+    birthplace: normalizedStoredRecord.birthplace ?? normalizedSeedRecord.birthplace,
+    passengerName: normalizedStoredRecord.passengerName || normalizedSeedRecord.passengerName,
+    journeys: normalizedStoredRecord.journeys.length > 0
+      ? normalizedStoredRecord.journeys
+      : normalizedSeedRecord.journeys,
+  }, 'personal');
+}
+
+function mergeSeedLibraryState(
+  seedLibrary: JourneyLibraryState,
+  storedLibrary: JourneyLibraryState,
+): JourneyLibraryState {
+  const normalizedSeedLibrary = normalizeLibraryState(seedLibrary);
+  const normalizedStoredLibrary = normalizeLibraryState(storedLibrary);
+  const personalRecord = mergeSeedPersonalRecord(
+    normalizedSeedLibrary.personalRecord,
+    normalizedStoredLibrary.personalRecord,
+  );
+  const historicalRecords = normalizedStoredLibrary.historicalRecords.length > 0
+    ? normalizedStoredLibrary.historicalRecords
+    : normalizedSeedLibrary.historicalRecords;
+  const availableRecordIds = new Set([
+    personalRecord.userId,
+    ...historicalRecords.map(record => record.userId),
+  ]);
+  const activeRecordId = availableRecordIds.has(normalizedStoredLibrary.activeRecordId)
+    ? normalizedStoredLibrary.activeRecordId
+    : personalRecord.userId;
+
+  return normalizeLibraryState({
+    ...normalizedSeedLibrary,
+    ...normalizedStoredLibrary,
+    personalRecord,
+    historicalRecords,
+    activeRecordId,
     dismissedPresetRecordIds: [],
-  };
+  });
+}
+
+function loadLibraryFromStorage(): JourneyLibraryState {
+  const seedLibrary = createSeedLibrary();
 
   try {
     const rawLibrary = localStorage.getItem(STORAGE_KEY);
@@ -402,7 +449,7 @@ function loadLibraryFromStorage(): JourneyLibraryState {
       const parsedLibrary = JSON.parse(rawLibrary) as unknown;
 
       if (isJourneyLibraryState(parsedLibrary)) {
-        return normalizeLibraryState(parsedLibrary);
+        return mergeSeedLibraryState(seedLibrary, parsedLibrary);
       }
     }
 
@@ -411,7 +458,7 @@ function loadLibraryFromStorage(): JourneyLibraryState {
       const parsed = JSON.parse(raw) as unknown;
 
       if (isUserJourneyRecord(parsed)) {
-        return normalizeLibraryState({
+        return mergeSeedLibraryState(seedLibrary, {
           personalRecord: normalizeRecord(parsed, 'personal'),
           historicalRecords: [],
           activeRecordId: parsed.userId,
@@ -420,7 +467,7 @@ function loadLibraryFromStorage(): JourneyLibraryState {
       }
 
       if (Array.isArray(parsed)) {
-        return normalizeLibraryState({
+        return mergeSeedLibraryState(seedLibrary, {
           personalRecord: normalizeRecord({
             ...seedLibrary.personalRecord,
             journeys: parsed.filter(isJourney),
@@ -436,13 +483,13 @@ function loadLibraryFromStorage(): JourneyLibraryState {
     if (archiveRaw) {
       const parsedArchive = JSON.parse(archiveRaw) as unknown;
       if (isLegacyJourneyArchive(parsedArchive)) {
-        return normalizeLibraryState(migrateLegacyArchive(parsedArchive));
+        return mergeSeedLibraryState(seedLibrary, migrateLegacyArchive(parsedArchive));
       }
     }
 
-    return normalizeLibraryState(seedLibrary);
+    return seedLibrary;
   } catch {
-    return normalizeLibraryState(seedLibrary);
+    return seedLibrary;
   }
 }
 
