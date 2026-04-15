@@ -1,4 +1,5 @@
 import TravelTracker, { type TravelTrackerMode } from './components/TravelTracker';
+import { Analytics } from '@vercel/analytics/react';
 
 function App() {
   const mode: TravelTrackerMode = (() => {
@@ -16,6 +17,7 @@ function App() {
   return (
     <div className="w-full h-full">
       <TravelTracker mode={mode} />
+      <Analytics />
     </div>
   );
 }
