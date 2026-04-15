@@ -82,6 +82,9 @@ export default function TravelTrackerPlugin({ embedMode = false }: Props) {
   const pluginMapUrl = typeof window === 'undefined'
     ? '/?variant=plugin'
     : `${window.location.origin}${window.location.pathname}?variant=plugin`;
+  const hideEmbedLink = typeof window !== 'undefined'
+    && embedMode
+    && new URLSearchParams(window.location.search).get('bare') === '1';
 
   return (
     <div className="relative h-full w-full">
@@ -97,7 +100,7 @@ export default function TravelTrackerPlugin({ embedMode = false }: Props) {
         onVisitedLocationSelect={handleVisitedLocationSelect}
       />
 
-      {embedMode ? (
+      {embedMode && !hideEmbedLink ? (
         <div className="pointer-events-none absolute inset-x-4 top-4 z-[2100] flex justify-end">
           <a
             href={pluginMapUrl}
@@ -112,7 +115,7 @@ export default function TravelTrackerPlugin({ embedMode = false }: Props) {
             显示完整地图
           </a>
         </div>
-      ) : (
+      ) : !embedMode ? (
         <>
           <div className={`absolute top-4 z-[2100] flex flex-col gap-2 transition-all ${topControlsPosition}`}>
             <button
@@ -220,7 +223,7 @@ export default function TravelTrackerPlugin({ embedMode = false }: Props) {
             </div>
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

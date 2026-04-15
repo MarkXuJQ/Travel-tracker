@@ -17,6 +17,9 @@ export function isBaseMapMode(value: string | null): value is BaseMapMode {
 export function useTravelMapPreferences() {
   const [baseMap, setBaseMap] = useState<BaseMapMode>(() => {
     if (typeof window === 'undefined') return 'liberty';
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryBaseMap = searchParams.get('baseMap');
+    if (isBaseMapMode(queryBaseMap)) return queryBaseMap;
     const savedBaseMap = window.localStorage.getItem(BASE_MAP_STORAGE_KEY);
     return isBaseMapMode(savedBaseMap) ? savedBaseMap : 'liberty';
   });
