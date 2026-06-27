@@ -9,7 +9,19 @@ import type {
 import { formatJourneyDate, getJourneyDateTimestamp } from '../utils/journeyDate';
 import { filterJourneysByRecordFilter } from '../utils/journeyRecordFilter';
 import type { JourneyRecordFilter } from '../types/journey';
+import type { CloudPublishStatus, CloudRecordLoadStatus } from '../services/travelRecordCloud';
 import TransportModeIcon from './TransportModeIcon';
+
+interface JourneyPanelCloudSyncProps {
+  loadStatus: CloudRecordLoadStatus;
+  loadError: string | null;
+  sourceLabel: string;
+  publishStatus: CloudPublishStatus;
+  message: string | null;
+  autoSync: boolean;
+  onAutoSyncChange: (enabled: boolean) => void;
+  onPublish: () => void;
+}
 
 interface Props {
   isOpen: boolean;
@@ -26,6 +38,7 @@ interface Props {
   activeFilter: JourneyRecordFilter | null;
   deleteJourney: (id: string) => void;
   exportRecord: () => void;
+  cloudSync?: JourneyPanelCloudSyncProps;
   selectedJourneyId: string | null;
   editingJourneyId?: string | null;
   onSelectJourney: (id: string) => void;
@@ -220,6 +233,7 @@ export default function JourneyPanel({
   activeFilter,
   deleteJourney,
   exportRecord,
+  cloudSync,
   selectedJourneyId,
   editingJourneyId = null,
   onSelectJourney,
@@ -414,9 +428,13 @@ export default function JourneyPanel({
         </div>
 
         <div className="relative border-t border-stone-200/80 bg-white/50 px-6 py-5 backdrop-blur-md">
+          {cloudSync && (
+            <CloudSyncPanel sync={cloudSync} />
+          )}
+
           <button
             type="button"
-            className="flex w-full items-center justify-between text-left text-stone-800 transition hover:text-stone-950"
+            className={`${cloudSync ? 'mt-4' : ''} flex w-full items-center justify-between text-left text-stone-800 transition hover:text-stone-950`}
             onClick={exportRecord}
           >
             <p className="text-sm text-stone-800">导出 JSON</p>
@@ -429,6 +447,60 @@ export default function JourneyPanel({
         </div>
       </aside>
     </>
+  );
+}
+
+function getCloudLoadLabel(status: CloudRecordLoadStatus, sourceLabel: string) {
+  if (status === 'loading') return '正在读取云端档案';
+  if (status === 'ready') return sourceLabel ? `已连接 ${sourceLabel}` : '已连接云端档案';
+  if (status === 'error') return '云端读取失败，当前使用本地档案';
+  return '云端档案';
+}
+
+function getCloudPublishTone(status: CloudPublishStatus) {
+  if (status === 'saved') return 'text-emerald-700';
+  if (status === 'error') return 'text-rose-700';
+  if (status === 'saving') return 'text-sky-700';
+  return 'text-stone-500';
+}
+
+function CloudSyncPanel({ sync }: { sync: JourneyPanelCloudSyncProps }) {
+  const publishDisabled = sync.publishStatus === 'saving';
+  const statusMessage = sync.message || sync.loadError || '保存后会同步 TravelTracker 与博客数据文件。';
+
+  return (
+    <section className="rounded-[22px] border border-stone-200/90 bg-white/72 px-4 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Cloud Sync</p>
+          <h3 className="mt-2 text-sm font-medium text-stone-900">
+            {getCloudLoadLabel(sync.loadStatus, sync.sourceLabel)}
+          </h3>
+          <p className={`mt-2 text-xs leading-5 ${getCloudPublishTone(sync.publishStatus)}`}>
+            {statusMessage}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="shrink-0 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-wait disabled:opacity-60"
+          disabled={publishDisabled}
+          onClick={sync.onPublish}
+        >
+          {publishDisabled ? '保存中' : '发布'}
+        </button>
+      </div>
+
+      <label className="mt-4 flex items-center justify-between gap-4 text-sm text-stone-700">
+        <span>修改后自动发布</span>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-stone-900"
+          checked={sync.autoSync}
+          onChange={event => sync.onAutoSyncChange(event.target.checked)}
+        />
+      </label>
+    </section>
   );
 }
 

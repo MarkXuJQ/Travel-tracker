@@ -10,6 +10,11 @@ import type {
 import { FAMOUS_JOURNEY_PRESETS } from '../data/famousJourneyArchives';
 import personalJourneyLibrary from '../data/personalJourneyLibrary.json';
 import { normalizeJourneyDate } from '../utils/journeyDate';
+import {
+  fetchCloudPersonalRecord,
+  type CloudRecordLoadStatus,
+  type CloudRecordSource,
+} from '../services/travelRecordCloud';
 
 const STORAGE_KEY = 'travel_globe_journey_library';
 const LEGACY_RECORD_STORAGE_KEY = 'travel_globe_journeys';
@@ -374,6 +379,24 @@ function createSeedLibrary() {
   return normalizeLibraryState(DEFAULT_LIBRARY_STATE);
 }
 
+function createLibraryWithPersonalRecord(
+  personalRecord: UserJourneyRecord,
+  baseLibrary = createSeedLibrary(),
+): JourneyLibraryState {
+  return normalizeLibraryState({
+    ...baseLibrary,
+    personalRecord: normalizeRecord(personalRecord, 'personal'),
+    activeRecordId:
+      baseLibrary.activeRecordId === baseLibrary.personalRecord.userId
+        ? personalRecord.userId
+        : baseLibrary.activeRecordId,
+  });
+}
+
+function getRecordSignature(record: UserJourneyRecord) {
+  return JSON.stringify(normalizeRecord(record, 'personal'));
+}
+
 function isPlaceholderPersonalRecord(record: UserJourneyRecord) {
   return (
     record.journeys.length === 0 &&
@@ -493,6 +516,51 @@ function loadLibraryFromStorage(): JourneyLibraryState {
   }
 }
 
+function hasLocalPersonalRecordOverride() {
+  if (typeof localStorage === 'undefined') return false;
+  const seedPersonalRecordSignature = getRecordSignature(createSeedLibrary().personalRecord);
+
+  try {
+    const rawLibrary = localStorage.getItem(STORAGE_KEY);
+    if (rawLibrary) {
+      const parsedLibrary = JSON.parse(rawLibrary) as unknown;
+
+      if (
+        isJourneyLibraryState(parsedLibrary) &&
+        getRecordSignature(parsedLibrary.personalRecord) !== seedPersonalRecordSignature
+      ) {
+        return true;
+      }
+    }
+
+    const raw = localStorage.getItem(LEGACY_RECORD_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+
+      if (
+        isUserJourneyRecord(parsed) &&
+        getRecordSignature(parsed) !== seedPersonalRecordSignature
+      ) {
+        return true;
+      }
+
+      if (Array.isArray(parsed) && parsed.some(isJourney)) {
+        return true;
+      }
+    }
+
+    const archiveRaw = localStorage.getItem(ARCHIVE_STORAGE_KEY);
+    if (archiveRaw) {
+      const parsedArchive = JSON.parse(archiveRaw) as unknown;
+      return isLegacyJourneyArchive(parsedArchive);
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 function resolveActiveRecord(library: JourneyLibraryState) {
   return library.activeRecordId === library.personalRecord.userId
     ? library.personalRecord
@@ -525,6 +593,11 @@ function buildHistoricalRecord(
 
 export function useJourneyStore() {
   const [library, setLibrary] = useState<JourneyLibraryState>(loadLibraryFromStorage);
+  const [hadLocalPersonalRecordOverrideAtStartup] = useState(hasLocalPersonalRecordOverride);
+  const [cloudRecordLoadStatus, setCloudRecordLoadStatus] =
+    useState<CloudRecordLoadStatus>('idle');
+  const [cloudRecordSource, setCloudRecordSource] = useState<CloudRecordSource | null>(null);
+  const [cloudRecordError, setCloudRecordError] = useState<string | null>(null);
   const presetSignature = FAMOUS_JOURNEY_PRESETS
     .map(record => `${record.userId}:${record.userName}:${record.journeys.length}`)
     .join('|');
@@ -538,6 +611,34 @@ export function useJourneyStore() {
     localStorage.removeItem(LEGACY_RECORD_STORAGE_KEY);
     localStorage.removeItem(ARCHIVE_STORAGE_KEY);
   }, [library]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setCloudRecordLoadStatus('loading');
+    setCloudRecordError(null);
+
+    fetchCloudPersonalRecord(controller.signal)
+      .then(({ personalRecord, source }) => {
+        setCloudRecordSource(source ?? null);
+        setCloudRecordLoadStatus('ready');
+
+        setLibrary(current => {
+          if (hadLocalPersonalRecordOverrideAtStartup) {
+            return current;
+          }
+
+          return createLibraryWithPersonalRecord(personalRecord, current);
+        });
+      })
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        setCloudRecordLoadStatus('error');
+        setCloudRecordError(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => controller.abort();
+  }, [hadLocalPersonalRecordOverrideAtStartup]);
 
   const activeRecord = useMemo(() => resolveActiveRecord(library), [library]);
   const journeys = useMemo(() => activeRecord.journeys, [activeRecord.journeys]);
@@ -774,6 +875,7 @@ export function useJourneyStore() {
     library,
     record: activeRecord,
     activeRecord,
+    personalRecord: library.personalRecord,
     activeRecordId: activeRecord.userId,
     activeRecordKind: activeRecord.kind ?? 'personal',
     activeRecordSource: activeRecord.source,
@@ -796,5 +898,11 @@ export function useJourneyStore() {
     setBirthplace,
     setPassengerName,
     exportRecord,
+    importPersonalRecord: (record: UserJourneyRecord) => {
+      setLibrary(current => createLibraryWithPersonalRecord(record, current));
+    },
+    cloudRecordLoadStatus,
+    cloudRecordSource,
+    cloudRecordError,
   };
 }
